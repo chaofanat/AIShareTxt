@@ -42,13 +42,13 @@ dev_requires = read_requirements("requirements-dev.txt")
 
 setup(
     name="aishare-txt",
-    version="1.0.0",
+    version="1.0.2",
     author="AIShareTxt Team",
-    author_email="aishare@example.com",
-    description="股票技术指标分析工具包",
+    author_email="chaofanat@gmail.com",
+    description="中国股票技术指标文本生成工具包，用于为金融分析相关领域的AI智能体提供上下文服务。",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/example/aishare-txt",
+    url="https://gitee.com/chaofanat/aishare-txt",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 4 - Beta",

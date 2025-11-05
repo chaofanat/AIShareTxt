@@ -191,7 +191,7 @@ class IndicatorConfig:
         
         # DeepSeek AI配置
         'deepseek': {
-            'api_key': os.environ.get('DEEPSEEK_API_KEY', 'sk-76e7edcd5796492a907d1f11c121f602'),  # DeepSeek API密钥（从环境变量获取）
+            'api_key': os.environ.get('DEEPSEEK_API_KEY'),  # DeepSeek API密钥（从环境变量获取）
             'base_url': 'https://api.deepseek.com',  # DeepSeek API地址
             'model': 'deepseek-chat',  # 使用的模型
             'max_tokens': 100,       # 最大输出token数
@@ -200,7 +200,7 @@ class IndicatorConfig:
         
         # 智谱AI配置
         'zhipuai': {
-            'api_key': '554b0440621a402ba40c9ee3de113f29.wGxg4Y9PHYJ0D8BE',  # 智谱AI API密钥
+            'api_key': os.environ.get('ZHIPUAI_API_KEY'),  # 智谱AI API密钥
             'model': 'glm-4.5-flash',  # 使用的模型
             'max_tokens': 100,       # 最大输出token数
             'temperature': 0.6       # 控制随机性，降低以提高一致性
