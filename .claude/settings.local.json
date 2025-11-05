@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv:*)",
+      "Bash(.venvScriptsactivate)",
+      "Bash(source:*)",
+      "Bash(python:*)",
+      "Bash(xargs uv pip uninstall:*)",
+      "Bash(temp_all_packages.txt)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

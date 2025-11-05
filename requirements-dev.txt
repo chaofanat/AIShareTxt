@@ -1,0 +1,13 @@
+# 开发和测试依赖
+pytest>=7.0.0
+pytest-cov>=4.0.0
+black>=22.0.0
+flake8>=5.0.0
+
+# 文档生成
+sphinx>=5.0.0
+sphinx-rtd-theme>=1.0.0
+
+# 开发工具（可选）
+jupyter>=1.0.0
+ipython>=8.0.0

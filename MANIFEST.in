@@ -1,0 +1,10 @@
+include README.md
+include LICENSE
+include requirements.txt
+include requirements-dev.txt
+recursive-include AIShareTxt *.py
+recursive-include AIShareTxt *.json
+recursive-include AIShareTxt *.txt
+recursive-include AIShareTxt *.md
+recursive-exclude * __pycache__
+recursive-exclude * *.py[co]
