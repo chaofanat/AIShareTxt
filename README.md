@@ -410,9 +410,9 @@ batch_analysis()
 
 ## 📞 联系方式
 
-- 项目主页: https://github.com/your-repo/aishare-txt
-- 问题反馈: https://github.com/your-repo/aishare-txt/issues
-- 邮箱: aishare@example.com
+- 项目主页: https://github.com/chaofanat/aishare-txt
+- 问题反馈: https://github.com/chaofanat/aishare-txt/issues
+- 邮箱: chaofanat@gmail.com
 
 ## 🙏 致谢
 

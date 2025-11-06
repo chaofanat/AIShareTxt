@@ -8,8 +8,9 @@
 import akshare as ak
 import pandas as pd
 import numpy as np
+import pandas_market_calendars as mcal
 from typing import Optional, Union, cast
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 from .config import IndicatorConfig as Config
 from ..utils.utils import LoggerManager
 import warnings
@@ -22,14 +23,122 @@ class StockDataFetcher:
     def __init__(self):
         self.config = Config()
         self.logger = LoggerManager.get_logger('data_fetcher')
+        # 获取上交所（SSE）日历
+        self.sse_calendar = mcal.get_calendar('SSE')
     
+    def _is_trading_day_and_not_closed(self) -> bool:
+        """
+        判断今天是否是交易日且未收盘
+
+        Returns:
+            bool: True表示今天是交易日且未收盘，False表示非交易日或已收盘
+        """
+        try:
+            now = datetime.now()
+            today = now.date()
+            current_time = now.time()
+
+            # 首先使用 pandas_market_calendars 判断是否为交易日
+            is_trading_day = self._is_trading_day(today)
+
+            if not is_trading_day:
+                self.logger.debug(f"今天 {today} 不是交易日")
+                return False
+
+            # 收盘时间：15:00
+            market_close = time(15, 0)
+
+            # 判断今天是否已收盘
+            is_market_closed = current_time >= market_close
+
+            self.logger.debug(f"当前时间: {now}")
+            self.logger.debug(f"是否为交易日: {is_trading_day}")
+            self.logger.debug(f"市场是否已收盘: {is_market_closed}")
+
+            # 如果是交易日且未收盘，返回True
+            return not is_market_closed
+
+        except Exception as e:
+            self.logger.warning(f"判断交易时间时出错：{str(e)}")
+            # 如果无法判断，返回False（保守处理）
+            return False
+
+    def _is_trading_day(self, date_to_check) -> bool:
+        """
+        判断指定日期是否为交易日
+
+        Args:
+            date_to_check: 要检查的日期
+
+        Returns:
+            bool: True表示是交易日，False表示非交易日
+        """
+        try:
+            # 获取日期前后的交易日历（扩大范围以确保能获取到数据）
+            start_date = date_to_check - timedelta(days=7)  # 往前7天
+            end_date = date_to_check + timedelta(days=7)    # 往后7天
+
+            schedule = self.sse_calendar.schedule(start_date=start_date, end_date=end_date)
+
+            if schedule.empty:
+                self.logger.debug(f"无法获取 {start_date} 到 {end_date} 的交易日历")
+                return self._fallback_trading_day_check(date_to_check)
+
+            # 检查指定日期是否在交易日历中
+            trading_days = schedule.index.date
+            is_trading = date_to_check in trading_days
+
+            self.logger.debug(f"使用日历检查 {date_to_check}: {'是交易日' if is_trading else '非交易日'}")
+            return is_trading
+
+        except Exception as e:
+            self.logger.warning(f"使用pandas_market_calendars判断交易日失败：{str(e)}")
+            # 如果 pandas_market_calendars 失败，回退到简单的周一到周五判断
+            return self._fallback_trading_day_check(date_to_check)
+
+    def _fallback_trading_day_check(self, date_to_check) -> bool:
+        """
+        备用的交易日判断方法（简单的周一到周五判断）
+
+        Args:
+            date_to_check: 要检查的日期
+
+        Returns:
+            bool: True表示是交易日，False表示非交易日
+        """
+        weekday = date_to_check.weekday()
+        is_trading = weekday < 5  # 0-4 是周一到周五
+        self.logger.debug(f"使用备用方法检查 {date_to_check}: {'是交易日' if is_trading else '非交易日'}")
+        return is_trading
+
+    def _remove_incomplete_trading_data(self, data: pd.DataFrame) -> pd.DataFrame:
+        """
+        如果今天是交易日且未收盘，移除最后一个不完整的交易日数据
+
+        Args:
+            data: 股票数据DataFrame
+
+        Returns:
+            处理后的DataFrame
+        """
+        if self._is_trading_day_and_not_closed():
+            self.logger.info("检测到当前为交易日且未收盘，移除最新不完整数据")
+            # 移除最后一行数据
+            if len(data) > 0:
+                data = data.iloc[:-1].copy()
+                self.logger.info(f"已移除最新数据，剩余 {len(data)} 条记录")
+        else:
+            self.logger.debug("当前为非交易日或已收盘，保留所有数据")
+
+        return data
+
     def _add_stock_prefix(self, stock_code: str) -> str:
         """
         为股票代码添加市场前缀
-        
+
         Args:
             stock_code (str): 6位股票代码，如 '000001'
-            
+
         Returns:
             str: 带前缀的股票代码，如 'sz000001' 或 'sh600000'
         """
@@ -110,11 +219,22 @@ class StockDataFetcher:
                 self.logger.error("数据类型错误：期望DataFrame类型")
                 return None
             data = data.sort_values('date').reset_index(drop=True)
-            
+
+            # 检查并处理未收盘的不完整数据
+            original_length = len(data)
+            data = self._remove_incomplete_trading_data(data)
+
+            if len(data) == 0:
+                self.logger.error("处理后数据为空")
+                return None
+
             self.logger.info(f"✓ 成功处理股票 {stock_code} 的数据，共 {len(data)} 条记录")
+            if original_length != len(data):
+                self.logger.info(f"已移除 {original_length - len(data)} 条不完整交易数据")
+
             self.logger.debug(f"数据日期范围: {data['date'].iloc[0]} 到 {data['date'].iloc[-1]}")
             self.logger.info(f"最新收盘价: {data['close'].iloc[-1]:.{self.config.DISPLAY_PRECISION['price']}f}")
-            
+
             return data
             
         except Exception as e:
@@ -211,10 +331,10 @@ class StockDataFetcher:
             stock_code (str): 股票代码，如 '000001'
             period (str): 周期，默认为 'daily'
             adjust (str): 复权类型，默认为 'qfq'
-            start_date (str): 开始日期，如 '20230101'，默认为当前时间往前推4个月
+            start_date (str): 开始日期，如 '20230101',默认为当前时间往前推4个月
         
         Returns:
-            pd.DataFrame or None: 股票数据DataFrame，失败返回None
+            pd.DataFrame or None: 股票数据DataFrame,失败返回None
         """
         if period is None:
             period = self.config.DATA_CONFIG['default_period']
@@ -253,51 +373,58 @@ class StockDataFetcher:
             self.logger.info("4. 股票代码不存在或已退市")
             return None
         
+
+        
         # 处理数据
         return self._process_stock_data(raw_data, stock_code)
     
     def get_fund_flow_data(self, stock_code):
         """
         获取主力资金流数据
-        
+
         Args:
             stock_code (str): 股票代码
-            
+
         Returns:
             dict: 资金流数据字典
+
+        Note:
+            akshare 的 stock_individual_fund_flow API 已经处理了交易日不完整数据的问题，
+            不需要额外移除当日数据
         """
         try:
             self.logger.info("正在获取主力资金流数据...")
-            
+
             fund_flow_data = {}
-            
+
             # 获取个股资金流数据
             try:
                 # 根据股票代码判断市场
                 market = self._determine_market(stock_code)
                 fund_df = ak.stock_individual_fund_flow(stock=stock_code, market=market)
-                
+
                 if fund_df is not None and len(fund_df) > 0:
                     # 获取最新一天的数据
                     latest_row = fund_df.iloc[-1]
-                    
+
                     # 解析资金流数据
                     fund_flow_data = self._parse_fund_flow_data(latest_row)
-                    
+
                     # 计算5日累计数据
                     if len(fund_df) >= 5:
                         fund_flow_data.update(self._calculate_5day_fund_flow(fund_df))
-                    
+
                     self.logger.info("✓ 主力资金流数据获取成功")
-                    
+                    self.logger.debug(f"资金流数据范围: {fund_df.iloc[0].get('日期', 'N/A')} 到 {fund_df.iloc[-1].get('日期', 'N/A')}")
+
             except Exception as e:
                 self.logger.warning(f"获取个股资金流数据失败：{str(e)}")
-            
+
             # 数据清洗和格式化
             fund_flow_data = self._clean_fund_flow_data(fund_flow_data)
-            
+
             return fund_flow_data
-            
+
         except Exception as e:
             self.logger.error(f"获取主力资金流数据失败：{str(e)}")
             return {}
