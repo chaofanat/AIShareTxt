@@ -9,8 +9,10 @@
 name: Upload Python Package
 
 on:
-  release:
-    types: [published]
+  # 当创建新标签时触发发布
+  push:
+    tags:
+      - 'v*'
   # 允许手动触发工作流，用于测试
   workflow_dispatch:
 
@@ -79,6 +81,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.10"
+          
+      - name: Extract version from tag
+        id: version
+        run: |
+          # 从标签中提取版本号（去掉v前缀）
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $VERSION"
 
       - name: Install dependencies
         run: |

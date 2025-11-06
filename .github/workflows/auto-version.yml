@@ -1,0 +1,94 @@
+name: Auto Version Update
+
+on:
+  push:
+    branches: [ main ]
+  # 允许手动触发工作流
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-version:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # 获取完整历史记录，用于计算版本号
+          fetch-depth: 0
+          # 使用token以便能够提交更改
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Calculate new version
+        id: version
+        run: |
+          # 获取当前版本号
+          CURRENT_VERSION=$(python -c "import re; exec(open('setup.py').read()); print(version)")
+          echo "Current version: $CURRENT_VERSION"
+          
+          # 获取自上次发布以来的提交数量
+          COMMIT_COUNT=$(git rev-list --count HEAD)
+          echo "Commit count: $COMMIT_COUNT"
+          
+          # 获取当前日期
+          DATE=$(date +"%Y.%m.%d")
+          echo "Date: $DATE"
+          
+          # 生成新版本号：日期.提交数
+          NEW_VERSION="${DATE}.${COMMIT_COUNT}"
+          echo "New version: $NEW_VERSION"
+          
+          # 设置输出变量
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "current_version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Update version in setup.py
+        run: |
+          # 使用sed替换setup.py中的版本号
+          sed -i "s/version=\"${{ steps.version.outputs.current_version }}\"/version=\"${{ steps.version.outputs.version }}\"/" setup.py
+          
+          # 验证更改
+          echo "Updated setup.py:"
+          grep "version=" setup.py
+
+      - name: Update version in __init__.py
+        run: |
+          # 使用sed替换__init__.py中的版本号
+          sed -i "s/__version__ = \"${{ steps.version.outputs.current_version }}\"/__version__ = \"${{ steps.version.outputs.version }}\"/" AIShareTxt/__init__.py
+          
+          # 验证更改
+          echo "Updated __init__.py:"
+          grep "__version__" AIShareTxt/__init__.py
+
+      - name: Commit and push changes
+        run: |
+          # 检查是否有更改
+          if [[ -n $(git status --porcelain) ]]; then
+            git add setup.py AIShareTxt/__init__.py
+            git commit -m "自动更新版本号至 ${{ steps.version.outputs.version }}"
+            git push
+            echo "Version updated and pushed successfully"
+          else
+            echo "No changes to commit"
+          fi
+
+      - name: Create tag
+        if: ${{ steps.version.outputs.version != steps.version.outputs.current_version }}
+        run: |
+          # 创建并推送新标签
+          git tag -a "v${{ steps.version.outputs.version }}" -m "Release version ${{ steps.version.outputs.version }}"
+          git push origin "v${{ steps.version.outputs.version }}"
+          echo "Tag v${{ steps.version.outputs.version }} created and pushed"
