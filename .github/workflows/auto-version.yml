@@ -36,7 +36,7 @@ jobs:
         id: version
         run: |
           # 获取当前版本号
-          CURRENT_VERSION=$(python -c "import re; exec(open('setup.py').read()); print(version)")
+          CURRENT_VERSION=$(python -c "import re; exec(open('setup.py').read()); print(version)" 2>/dev/null || grep -oP '(?<=version=\")[^\"]+' setup.py)
           echo "Current version: $CURRENT_VERSION"
           
           # 获取自上次发布以来的提交数量
