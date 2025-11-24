@@ -14,15 +14,16 @@ class ReportGenerator:
     def __init__(self):
         self.config = Config()
     
-    def generate_report(self, stock_code, indicators, stock_info=None):
+    def generate_report(self, stock_code, indicators, stock_info=None, stock_data=None):
         """
         生成完整的股票分析报告
-        
+
         Args:
             stock_code (str): 股票代码
             indicators (dict): 指标数据字典
             stock_info (dict): 股票基本信息
-            
+            stock_data (pd.DataFrame): 股票历史数据
+
         Returns:
             str: 格式化的报告文本
         """
@@ -47,7 +48,11 @@ class ReportGenerator:
         report.extend(self._generate_fund_flow_section(indicators))
         report.extend(self._generate_trend_strength_section(indicators))
         report.extend(self._generate_summary_section(indicators))
-        
+
+        # 最近5天OLHCV数据
+        if stock_data is not None:
+            report.extend(self._generate_recent_ohlcv_section(stock_data))
+
         # 报告尾部
         report.extend(self._generate_footer())
         
@@ -280,7 +285,7 @@ class ReportGenerator:
         summary = self._collect_summary_items(indicators)
         
         for item in summary:
-            section.append(f"• {item}")
+            section.append(f"- {item}")
         
         return section
     
@@ -779,5 +784,52 @@ class ReportGenerator:
                     summary.append(f"超大单：净流入{super_amount_wan:.{self.config.DISPLAY_PRECISION['volume_wan']}f}万元({super_ratio:+.1f}%)")
                 else:
                     summary.append(f"超大单：净流出{abs(super_amount_wan):.{self.config.DISPLAY_PRECISION['volume_wan']}f}万元({super_ratio:+.1f}%)")
-        
+
         return summary
+
+    def _generate_recent_ohlcv_section(self, stock_data):
+        """生成最近5天OLHCV数据部分"""
+        section = []
+        section.append("\n【十、最近5天交易数据】")
+        section.append(self.config.REPORT_CONFIG['section_separator'])
+
+        # 获取最近5天数据
+        recent_data = stock_data.tail(5)
+
+        # 表头
+        section.append("日期        开盘价    最高价    最低价    收盘价    成交量(万手)  成交额(亿元)")
+        section.append("─" * 70)
+
+        for idx, row in recent_data.iterrows():
+            # 格式化日期
+            date_str = idx.strftime('%m-%d') if hasattr(idx, 'strftime') else str(idx)[:5]
+
+            # 格式化价格数据
+            open_price = f"{row['open']:.2f}"
+            high_price = f"{row['high']:.2f}"
+            low_price = f"{row['low']:.2f}"
+            close_price = f"{row['close']:.2f}"
+
+            # 计算涨跌幅
+            if idx != recent_data.index[0]:  # 不是第一行
+                prev_close = recent_data.loc[recent_data.index[recent_data.index.get_loc(idx) - 1], 'close']
+                change_percent = ((row['close'] - prev_close) / prev_close * 100)
+                change_sign = "▲" if change_percent > 0 else "▼" if change_percent < 0 else "─"
+                close_price = f"{row['close']:.2f}{change_sign}"
+            else:
+                close_price = f"{row['close']:.2f}"
+
+            # 格式化成交量 (转换为万手)
+            volume_wan_hands = row['volume'] / 10000
+            volume_str = f"{volume_wan_hands:.1f}"
+
+            # 格式化成交额 (转换为亿元)
+            amount = row.get('amount', row['close'] * row['volume'])  # 如果没有amount字段，用估算值
+            amount_yi = amount / 100000000
+            amount_str = f"{amount_yi:.2f}"
+
+            # 组合一行数据
+            line = f"{date_str}  {open_price:>8}  {high_price:>8}  {low_price:>8}  {close_price:>10}  {volume_str:>10}  {amount_str:>12}"
+            section.append(line)
+
+        return section

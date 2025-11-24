@@ -9,7 +9,7 @@ import warnings
 from .data_fetcher import StockDataFetcher
 from ..indicators.technical_indicators import TechnicalIndicators
 from .report_generator import ReportGenerator
-from ..utils.utils import Logger, LoggerManager, Utils, DataValidator, ErrorHandler
+from ..utils.utils import Logger, LoggerManager, Utils, DataValidator, ErrorHandler, PerformanceMonitor
 from .config import IndicatorConfig as Config
 
 warnings.filterwarnings('ignore')
@@ -120,9 +120,10 @@ class StockAnalyzer:
             # 生成报告
             self.logger.info("生成分析报告...")
             report = self.report_generator.generate_report(
-                stock_code, 
-                self.indicators, 
-                self.stock_info
+                stock_code,
+                self.indicators,
+                self.stock_info,
+                self.stock_data
             )
             
             if monitor:
@@ -172,9 +173,10 @@ class StockAnalyzer:
             
             # 生成报告（不包含基本信息和资金流）
             report = self.report_generator.generate_report(
-                stock_code, 
-                self.indicators, 
-                None  # 不包含基本信息
+                stock_code,
+                self.indicators,
+                None,  # 不包含基本信息
+                self.stock_data
             )
             
             return report
@@ -382,6 +384,15 @@ def quick_test(stock_code):
         
         # 执行分析
         report = analyzer.analyze_stock(stock_code, enable_performance_monitor=True)
+        
+        # 检查分析结果是否为错误信息
+        if report and (report.startswith("错误：") or report.startswith("数据质量验证失败") or 
+                      report.startswith("指标验证失败") or report.startswith("分析过程中出错") or
+                      "无数据" in report or "计算失败" in report):
+            print("\n" + report)
+            logger.error(f"快速测试股票 {stock_code} 失败: {report}")
+            return False
+        
         print("\n" + report)
         
         # 显示分析摘要
@@ -403,8 +414,45 @@ def quick_test(stock_code):
 
 def main():
     """主函数"""
-    analyzer = StockAnalyzer()
     utils = Utils()
+    
+    # 首先检查命令行参数（包括帮助参数）
+    stock_code = utils.parse_command_line_args()
+    if stock_code:
+        # 如果提供了股票代码，则初始化分析器并进行快速测试
+        analyzer = StockAnalyzer()
+        logger = LoggerManager.get_logger('stock_analyzer')
+        
+        print("股票技术指标分析器 (重构版)")
+        print(utils.create_separator())
+        print("提示：可以在命令行直接运行 python stock_analyzer.py 000001 来快速测试")
+        logger.info("股票技术指标分析器启动")
+        
+        # 验证分析环境
+        print("\n验证分析环境...")
+        logger.info("开始验证分析环境")
+        is_valid, errors = analyzer.validate_analysis_environment()
+        if not is_valid:
+            print("环境验证失败:")
+            logger.error("环境验证失败")
+            for error in errors:
+                print(f"  [错误] {error}")
+                logger.error(f"环境错误: {error}")
+            return
+        else:
+            print("环境验证通过")
+            logger.info("环境验证通过")
+        
+        logger.info(f"使用命令行参数启动快速测试: {stock_code}")
+        result = quick_test(stock_code)
+        if result:
+            print("\n分析完成！")
+        else:
+            print("\n分析失败，请检查日志获取详细信息。")
+        return
+    
+    # 如果没有提供命令行参数，则进入交互模式
+    analyzer = StockAnalyzer()
     logger = LoggerManager.get_logger('stock_analyzer')
     
     print("股票技术指标分析器 (重构版)")
@@ -424,15 +472,8 @@ def main():
             logger.error(f"环境错误: {error}")
         return
     else:
-        print("✅ 环境验证通过")
+        print("环境验证通过")
         logger.info("环境验证通过")
-    
-    # 检查命令行参数
-    stock_code = utils.parse_command_line_args()
-    if stock_code:
-        logger.info(f"使用命令行参数启动快速测试: {stock_code}")
-        quick_test(stock_code)
-        return
     
     # 交互模式
     while True:

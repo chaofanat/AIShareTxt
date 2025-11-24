@@ -272,12 +272,29 @@ class Utils:
             str or None: 股票代码，如果没有提供则返回None
         """
         if len(sys.argv) > 1:
-            stock_code = sys.argv[1].strip()
-            if Utils.validate_stock_code(stock_code):
-                return stock_code
+            arg = sys.argv[1].strip()
+            
+            # 处理帮助参数
+            if arg in ['-h', '--help', 'help']:
+                print("\n股票技术指标分析器 (重构版)")
+                print("\n使用方法:")
+                print("  aishare [股票代码]     - 分析指定股票")
+                print("  aishare -h/--help     - 显示帮助信息")
+                print("\n示例:")
+                print("  aishare 000001        - 分析平安银行")
+                print("  aishare 600036        - 分析招商银行")
+                print("\n交互模式:")
+                print("  不带参数运行将进入交互模式，可以输入股票代码进行分析")
+                print("  输入 'quit' 或 'exit' 退出程序")
+                sys.exit(0)
+            
+            # 处理股票代码
+            if Utils.validate_stock_code(arg):
+                return arg
             else:
-                print(f"错误：股票代码 '{stock_code}' 格式不正确")
+                print(f"错误：股票代码 '{arg}' 格式不正确")
                 print("正确格式：6位数字，如 000001")
+                print("使用 'aishare --help' 查看更多帮助信息")
                 return None
         return None
     

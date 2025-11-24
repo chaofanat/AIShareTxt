@@ -470,7 +470,6 @@ class TechnicalIndicators:
         # OBV背离验证
         if len(obv) >= 20 and len(close) >= 20:
             try:
-                from scipy.signal import argrelextrema
                 indicators['OBV_DIVERGENCE'] = self._detect_obv_divergence(obv, close, obv_config)
             except ImportError:
                 indicators['OBV_DIVERGENCE'] = "需要scipy库进行背离分析"
