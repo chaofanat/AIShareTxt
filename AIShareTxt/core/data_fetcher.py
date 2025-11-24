@@ -48,14 +48,24 @@ class StockDataFetcher:
             # 收盘时间：15:00
             market_close = time(15, 0)
 
+            # 开盘时间：9:30
+            market_open = time(9, 25)
+            # 判断今天是否已开盘
+            is_market_opened = current_time >= market_open
+            # 如果今天未开盘，返回False
+            if not is_market_opened:
+                self.logger.debug(f"今天 {today} 还未开盘")
+                return False
+
             # 判断今天是否已收盘
-            is_market_closed = current_time >= market_close
+            is_market_closed = current_time >= market_close 
 
             self.logger.debug(f"当前时间: {now}")
             self.logger.debug(f"是否为交易日: {is_trading_day}")
+            self.logger.debug(f"市场是否已开盘: {is_market_opened}")
             self.logger.debug(f"市场是否已收盘: {is_market_closed}")
 
-            # 如果是交易日且未收盘，返回True
+            # 如果是交易日且已开盘但是未收盘，返回True
             return not is_market_closed
 
         except Exception as e:
@@ -113,7 +123,7 @@ class StockDataFetcher:
 
     def _remove_incomplete_trading_data(self, data: pd.DataFrame) -> pd.DataFrame:
         """
-        如果今天是交易日且未收盘，移除最后一个不完整的交易日数据
+        如果今天是交易日且已经开盘但是未收盘，移除最后一个不完整的交易日数据
 
         Args:
             data: 股票数据DataFrame
