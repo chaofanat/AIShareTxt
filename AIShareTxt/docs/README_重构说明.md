@@ -32,7 +32,7 @@
 - **指标类别**:
   - 移动平均线（MA、EMA、WMA）
   - 均线衍生指标（BIAS、MACD、布林带）
-  - 量价指标（VWAP、OBV）
+  - 量价指标（VWMA、OBV）
   - 趋势强度指标（ADX、DMI）
   - 动量振荡指标（RSI、KD）
   - 波动率指标（ATR）

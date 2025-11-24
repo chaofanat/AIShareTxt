@@ -169,11 +169,11 @@ class ReportGenerator:
         section.append("\n【四、量价辅助指标】")
         section.append(self.config.REPORT_CONFIG['section_separator'])
         
-        # VWAP
-        if 'VWAP_14' in indicators:
-            section.append("成交量加权平均价 (VWAP):")
-            section.append(f"  14日VWAP: {indicators.get('VWAP_14', 0):.{self.config.DISPLAY_PRECISION['price']}f}")
-            section.append(f"  价格关系: {self._get_vwap_relationship(indicators)}")
+        # VWMA
+        if 'VWMA_14' in indicators:
+            section.append("成交量加权移动平均 (VWMA):")
+            section.append(f"  14日VWMA: {indicators.get('VWMA_14', 0):.{self.config.DISPLAY_PRECISION['price']}f}")
+            section.append(f"  价格关系: {self._get_vwma_relationship(indicators)}")
         
         # OBV
         if 'OBV_current' in indicators:
@@ -353,11 +353,11 @@ class ReportGenerator:
         else:
             return "价格在带内"
     
-    def _get_vwap_relationship(self, indicators):
-        """获取VWAP关系"""
+    def _get_vwma_relationship(self, indicators):
+        """获取VWMA关系"""
         current_price = indicators.get('current_price', 0)
-        vwap = indicators.get('VWAP_14', 0)
-        return "价格>VWAP" if current_price > vwap else "价格<VWAP"
+        vwma = indicators.get('VWMA_14', 0)
+        return "价格>VWMA" if current_price > vwma else "价格<VWMA"
     
     def _generate_obv_analysis(self, indicators):
         """生成OBV分析"""

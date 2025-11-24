@@ -144,12 +144,23 @@ class TechnicalIndicators:
         indicators = {}
         
         try:
-            # VWAP (Volume Weighted Average Price)
-            typical_price = (high + low + close) / 3
-            vwap_period = self.config.VWAP_PERIOD
-            if len(typical_price) >= vwap_period:
-                price_volume = typical_price[-vwap_period:] * volume[-vwap_period:]
-                indicators['VWAP_14'] = np.sum(price_volume) / np.sum(volume[-vwap_period:])
+            # VWMA (Volume Weighted Moving Average)
+            close_price = close
+            volume_weighted_sum = 0
+            total_volume = 0
+            vwma_period = self.config.VWMA_PERIOD
+
+            if len(close_price) >= vwma_period:
+                # 取最近vwma_period周期的数据计算VWMA
+                recent_close = close_price[-vwma_period:]
+                recent_volume = volume[-vwma_period:]
+
+                # 计算每个周期的成交量权重
+                volume_weighted_sum = np.sum(recent_close * recent_volume)
+                total_volume = np.sum(recent_volume)
+
+                if total_volume > 0:
+                    indicators['VWMA_14'] = volume_weighted_sum / total_volume
             
             # OBV (On Balance Volume)
             close_float = close.astype(np.float64)

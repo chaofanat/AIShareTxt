@@ -312,7 +312,7 @@ class StockAnalyzer:
                 'Bollinger Bands': f"参数: {self.config.BOLLINGER_BANDS_CONFIG}"
             },
             '量价指标': {
-                'VWAP': f"成交量加权平均价，周期: {self.config.VWAP_PERIOD}",
+                'VWMA': f"成交量加权移动平均，周期: {self.config.VWMA_PERIOD}",
                 'OBV': "能量潮指标"
             },
             '趋势强度': {

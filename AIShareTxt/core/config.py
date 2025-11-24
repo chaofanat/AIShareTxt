@@ -55,8 +55,8 @@ class IndicatorConfig:
     # ATR配置
     ATR_PERIOD = 14
     
-    # VWAP配置
-    VWAP_PERIOD = 14
+    # VWMA配置
+    VWMA_PERIOD = 14
     
     # BIAS乖离率配置
     BIAS_PERIODS = [5, 10, 20]
