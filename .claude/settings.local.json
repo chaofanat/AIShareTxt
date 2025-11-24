@@ -6,7 +6,8 @@
       "Bash(source:*)",
       "Bash(python:*)",
       "Bash(xargs uv pip uninstall:*)",
-      "Bash(temp_all_packages.txt)"
+      "Bash(temp_all_packages.txt)",
+      "Bash(pip install:*)"
     ],
     "deny": [],
     "ask": []

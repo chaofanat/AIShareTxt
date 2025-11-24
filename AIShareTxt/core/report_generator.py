@@ -800,9 +800,18 @@ class ReportGenerator:
         section.append("日期        开盘价    最高价    最低价    收盘价    成交量(万手)  成交额(亿元)")
         section.append("─" * 70)
 
-        for idx, row in recent_data.iterrows():
-            # 格式化日期
-            date_str = idx.strftime('%m-%d') if hasattr(idx, 'strftime') else str(idx)[:5]
+        # 获取索引位置，用于计算涨跌幅
+        index_positions = list(range(len(recent_data)))
+        
+        for i, (idx, row) in enumerate(recent_data.iterrows()):
+            # 格式化日期 - 使用date列而不是索引
+            if 'date' in row and hasattr(row['date'], 'strftime'):
+                date_str = row['date'].strftime('%Y-%m-%d')
+            elif 'date' in row:
+                date_str = str(row['date'])[:10] if len(str(row['date'])) > 10 else str(row['date'])
+            else:
+                # 如果没有date列，尝试使用索引
+                date_str = idx.strftime('%Y-%m-%d') if hasattr(idx, 'strftime') else str(idx)[:10]
 
             # 格式化价格数据
             open_price = f"{row['open']:.2f}"
@@ -811,8 +820,8 @@ class ReportGenerator:
             close_price = f"{row['close']:.2f}"
 
             # 计算涨跌幅
-            if idx != recent_data.index[0]:  # 不是第一行
-                prev_close = recent_data.loc[recent_data.index[recent_data.index.get_loc(idx) - 1], 'close']
+            if i > 0:  # 不是第一行
+                prev_close = recent_data.iloc[i-1]['close']
                 change_percent = ((row['close'] - prev_close) / prev_close * 100)
                 change_sign = "▲" if change_percent > 0 else "▼" if change_percent < 0 else "─"
                 close_price = f"{row['close']:.2f}{change_sign}"
@@ -820,11 +829,12 @@ class ReportGenerator:
                 close_price = f"{row['close']:.2f}"
 
             # 格式化成交量 (转换为万手)
-            volume_wan_hands = row['volume'] / 10000
+            volume_wan_hands = row['volume'] / 1000000
             volume_str = f"{volume_wan_hands:.1f}"
 
             # 格式化成交额 (转换为亿元)
-            amount = row.get('amount', row['close'] * row['volume'])  # 如果没有amount字段，用估算值
+            # 如果没有turnover字段，使用估算值
+            amount = row.get('turnover',  row['close'] * row['volume'])  
             amount_yi = amount / 100000000
             amount_str = f"{amount_yi:.2f}"
 

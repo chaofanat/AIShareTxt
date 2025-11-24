@@ -480,38 +480,63 @@ class TechnicalIndicators:
         """检测OBV背离"""
         try:
             from scipy.signal import argrelextrema
-            
+
             recent_close = close[-20:]
             recent_obv = obv[-20:]
             
+            # 将pandas Series转换为numpy数组以解决兼容性问题
+            if hasattr(recent_close, 'values'):
+                recent_close = recent_close.values
+            if hasattr(recent_obv, 'values'):
+                recent_obv = recent_obv.values
+
+            # 确保有足够的数据点
+            if len(recent_close) < 10 or len(recent_obv) < 10:
+                return "数据不足"
+
             # 找局部高点和低点
             order = config['extrema_order']
             price_highs = argrelextrema(recent_close, np.greater, order=order)[0]
             price_lows = argrelextrema(recent_close, np.less, order=order)[0]
             obv_highs = argrelextrema(recent_obv, np.greater, order=order)[0]
             obv_lows = argrelextrema(recent_obv, np.less, order=order)[0]
-            
-            # 顶背离：价格创新高，OBV未创新高
-            if len(price_highs) >= 2 and len(obv_highs) >= 2:
+
+            # 顶背离检测：价格创新高，但OBV未创新高
+            if len(price_highs) >= 2:
+                # 取最后两个价格高点
                 latest_price_high_idx = price_highs[-1]
                 prev_price_high_idx = price_highs[-2]
-                
-                if latest_price_high_idx < len(obv_highs) and prev_price_high_idx < len(obv_highs):
-                    if (recent_close[latest_price_high_idx] > recent_close[prev_price_high_idx] and
-                        recent_obv[latest_price_high_idx] < recent_obv[prev_price_high_idx]):
+
+                # 检查价格是否创新高
+                if recent_close[latest_price_high_idx] > recent_close[prev_price_high_idx]:
+                    # 寻找对应时间点的OBV值进行比较
+                    latest_obv_value = recent_obv[latest_price_high_idx]
+                    prev_obv_value = recent_obv[prev_price_high_idx]
+
+                    # 如果OBV没有创新高，则为顶背离
+                    if latest_obv_value < prev_obv_value:
                         return "顶背离"
-            
-            # 底背离：价格创新低，OBV未创新低
-            if len(price_lows) >= 2 and len(obv_lows) >= 2:
+
+            # 底背离检测：价格创新低，但OBV未创新低
+            if len(price_lows) >= 2:
+                # 取最后两个价格低点
                 latest_price_low_idx = price_lows[-1]
                 prev_price_low_idx = price_lows[-2]
-                
-                if latest_price_low_idx < len(obv_lows) and prev_price_low_idx < len(obv_lows):
-                    if (recent_close[latest_price_low_idx] < recent_close[prev_price_low_idx] and
-                        recent_obv[latest_price_low_idx] > recent_obv[prev_price_low_idx]):
+
+                # 检查价格是否创新低
+                if recent_close[latest_price_low_idx] < recent_close[prev_price_low_idx]:
+                    # 寻找对应时间点的OBV值进行比较
+                    latest_obv_value = recent_obv[latest_price_low_idx]
+                    prev_obv_value = recent_obv[prev_price_low_idx]
+
+                    # 如果OBV没有创新低，则为底背离
+                    if latest_obv_value > prev_obv_value:
                         return "底背离"
-            
+
             return "无明显背离"
-            
-        except Exception:
+
+        except ImportError:
+            return "需要scipy库进行背离分析"
+        except Exception as e:
+            print(f"OBV背离检测错误: {e}")
             return "背离检测失败"

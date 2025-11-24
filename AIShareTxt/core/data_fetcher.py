@@ -262,6 +262,11 @@ class StockDataFetcher:
                 start_date=start_date,
                 adjust=cast(str, adjust)
             )
+
+            # 对成交量列需要进行数量转换*100，从手转换为股
+            if '成交量' in raw_data.columns:
+                raw_data['成交量'] *= 100
+            
             return cast(pd.DataFrame, raw_data)
         except Exception as e:
             self.logger.warning(f"[方法1] 东方财富API获取失败：{str(e)}")
@@ -290,6 +295,11 @@ class StockDataFetcher:
                 end_date=end_date,
                 adjust=adjust
             )
+
+            # amount列更名为turnover
+            if 'amount' in raw_data.columns:
+                raw_data.rename(columns={'amount': 'turnover'}, inplace=True)
+            
             return cast(pd.DataFrame, raw_data)
         except Exception as e:
             self.logger.warning(f"[方法2] 新浪API获取失败：{str(e)}")
@@ -318,6 +328,13 @@ class StockDataFetcher:
                 end_date=end_date,
                 adjust=adjust
             )
+            
+            # 对成交量列需要进行数量转换*100，从手转换为股，并且列名从amount改为volume
+            if 'amount' in raw_data.columns:
+                raw_data['volume'] = raw_data['amount'] * 100
+                # 移除原始amount列
+                raw_data.drop(columns=['amount'], inplace=True)
+            
             return cast(pd.DataFrame, raw_data)
         except Exception as e:
             self.logger.warning(f"[方法3] 腾讯API获取失败：{str(e)}")
