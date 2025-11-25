@@ -5,7 +5,7 @@ AIShareTxt - 股票技术指标分析工具包
 AI集成分析和报告生成功能。
 """
 
-__version__ = "2025.11.24.26"
+__version__ = "2025.11.24.29"
 __author__ = "AIShareTxt Team"
 
 # 导入核心类
