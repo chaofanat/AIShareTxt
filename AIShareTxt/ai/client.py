@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 AI 客户端封装
-支持多种AI提供商（DeepSeek、智谱AI）进行股票投资建议分析
+支持多种AI提供商（DeepSeek、智谱AI）进行股票数据处理建议
 """
 
 import logging
@@ -33,13 +33,13 @@ from ..utils.utils import LoggerManager
 logger = LoggerManager.get_logger('ai_client')
 
 
-class AIStockAnalyzer:
-    """AI股票分析客户端"""
-    
+class AIStockDataProcessor:
+    """AI股票数据处理建议客户端"""
+
     def __init__(self, api_key: Optional[str] = None, provider: Optional[str] = None):
         """
         初始化AI客户端
-        
+
         Args:
             api_key: AI API密钥（可选，默认从配置文件获取）
             provider: AI提供商（可选，默认从配置文件获取），可选值: 'deepseek', 'zhipuai'
@@ -123,16 +123,16 @@ class AIStockAnalyzer:
             return self.client is not None and HAS_ZHIPUAI
         return False
     
-    def analyze_investment_recommendation(self, technical_report: str, stock_code: str) -> int:
+    def generate_data_processing_recommendation(self, technical_report: str, stock_code: str) -> int:
         """
-        基于技术分析报告生成投资建议
-        
+        基于技术数据报告生成处理建议
+
         Args:
-            technical_report: 技术分析报告
+            technical_report: 技术数据报告
             stock_code: 股票代码
-            
+
         Returns:
-            int: 投资建议 (1: 立即买入, -1: 不适合买入, 0: 观望等待)
+            int: 处理建议 (1: 立即买入, -1: 不适合买入, 0: 观望等待)
         """
         if not self.is_available():
             logger.warning("AI功能不可用，返回默认观望建议")
@@ -144,19 +144,19 @@ class AIStockAnalyzer:
             
             # 根据提供商选择调用不同的方法
             if self.provider == 'deepseek':
-                return self._analyze_with_deepseek(technical_report, stock_code, config)
+                return self._process_with_deepseek(technical_report, stock_code, config)
             elif self.provider == 'zhipuai':
-                return self._analyze_with_zhipuai(technical_report, stock_code, config)
+                return self._process_with_zhipuai(technical_report, stock_code, config)
             else:
                 logger.error(f"不支持的AI提供商: {self.provider}")
                 return 0
-                
+
         except Exception as e:
-            logger.error(f"AI分析失败: {e}")
+            logger.error(f"AI数据处理失败: {e}")
             return 0  # 出错时默认返回观望
     
-    def _analyze_with_deepseek(self, technical_report: str, stock_code: str, config) -> int:
-        """使用DeepSeek进行分析"""
+    def _process_with_deepseek(self, technical_report: str, stock_code: str, config) -> int:
+        """使用DeepSeek进行数据处理"""
         ai_config = config.AI_CONFIG['deepseek']
         
         prompt = config.AI_CONFIG['recommendation']['prompt_template'].format(
@@ -191,8 +191,8 @@ class AIStockAnalyzer:
         
         return result
     
-    def _analyze_with_zhipuai(self, technical_report: str, stock_code: str, config) -> int:
-        """使用智谱AI进行分析"""
+    def _process_with_zhipuai(self, technical_report: str, stock_code: str, config) -> int:
+        """使用智谱AI进行数据处理"""
         ai_config = config.AI_CONFIG['zhipuai']
         
         prompt = config.AI_CONFIG['recommendation']['prompt_template'].format(
@@ -292,22 +292,23 @@ class AIStockAnalyzer:
 # 全局AI分析器实例
 _ai_analyzer = None
 
-def get_ai_analyzer(api_key: Optional[str] = None, provider: Optional[str] = None) -> AIStockAnalyzer:
+def get_ai_processor(api_key: Optional[str] = None, provider: Optional[str] = None) -> AIStockDataProcessor:
     """
-    获取全局AI分析器实例
-    
+    获取全局AI处理器实例
+
     Args:
         api_key: API密钥
         provider: AI提供商（'deepseek' 或 'zhipuai'）
-        
+
     Returns:
-        AIStockAnalyzer: AI分析器实例
+        AIStockDataProcessor: AI处理器实例
     """
     global _ai_analyzer
     if _ai_analyzer is None or (api_key and _ai_analyzer.api_key != api_key) or (provider and _ai_analyzer.provider != provider):
-        _ai_analyzer = AIStockAnalyzer(api_key, provider)
+        _ai_analyzer = AIStockDataProcessor(api_key, provider)
     return _ai_analyzer
 
 
 # 向后兼容的别名
-AIClient = AIStockAnalyzer
+AIClient = AIStockDataProcessor
+AIStockAnalyzer = AIStockDataProcessor  # 保持向后兼容

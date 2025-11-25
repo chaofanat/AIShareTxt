@@ -69,7 +69,7 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "aishare=AIShareTxt.core.analyzer:main",
+            "aishare=AIShareTxt.core.data_processor:main",
         ],
     },
     include_package_data=True,

@@ -100,9 +100,9 @@ class LoggerManager:
             cls.setup_logging()
         
         if name is None:
-            name = 'stock_analyzer'
-        elif not name.startswith('stock_analyzer'):
-            name = f'stock_analyzer.{name}'
+            name = 'aishare_txt'
+        elif not name.startswith('aishare_txt'):
+            name = f'aishare_txt.{name}'
         
         return logging.getLogger(name)
     
@@ -117,10 +117,10 @@ class LoggerManager:
         if not cls._initialized:
             cls.setup_logging()
         
-        # 更新所有stock_analyzer相关的logger
-        for logger_name in ['stock_analyzer', 'stock_analyzer.data_fetcher', 
-                           'stock_analyzer.technical_indicators', 'stock_analyzer.report_generator',
-                           'stock_analyzer.utils']:
+        # 更新所有aishare_txt相关的logger
+        for logger_name in ['aishare_txt', 'aishare_txt.data_fetcher',
+                           'aishare_txt.technical_indicators', 'aishare_txt.report_generator',
+                           'aishare_txt.utils']:
             logger = logging.getLogger(logger_name)
             logger.setLevel(getattr(logging, level.upper()))
     
@@ -151,10 +151,10 @@ class LoggerManager:
         handler.setFormatter(formatter)
         handler.setLevel(getattr(logging, level.upper()))
         
-        # 添加到所有stock_analyzer相关的logger
-        for logger_name in ['stock_analyzer', 'stock_analyzer.data_fetcher', 
-                           'stock_analyzer.technical_indicators', 'stock_analyzer.report_generator',
-                           'stock_analyzer.utils']:
+        # 添加到所有aishare_txt相关的logger
+        for logger_name in ['aishare_txt', 'aishare_txt.data_fetcher',
+                           'aishare_txt.technical_indicators', 'aishare_txt.report_generator',
+                           'aishare_txt.utils']:
             logger = logging.getLogger(logger_name)
             logger.addHandler(handler)
 

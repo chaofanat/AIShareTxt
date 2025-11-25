@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-股票技术指标分析器配置文件
+股票数据处理器配置文件
 """
 
 import os
 
 class IndicatorConfig:
-    """配置类，包含所有硬编码的常量和阈值"""
+    """股票数据处理配置类，包含所有硬编码的常量和阈值"""
     
     # 均线周期配置
     MA_PERIODS = {
@@ -173,8 +173,8 @@ class IndicatorConfig:
         'invalid_code': "错误：股票代码格式错误",
         'network_error': "错误：网络连接问题",
         'api_error': "错误：数据接口暂时不可用",
-        'data_insufficient': "错误：数据不足，无法计算指标",
-        'calculation_failed': "错误：指标计算失败"
+        'data_insufficient': "错误：数据不足，无法处理指标",
+        'calculation_failed': "错误：指标处理失败"
     }
     
     # 市场代码映射
@@ -206,22 +206,22 @@ class IndicatorConfig:
             'temperature': 0.6       # 控制随机性，降低以提高一致性
         },
         
-        # 投资建议配置
+        # 数据处理建议配置
         'recommendation': {
             'prompt_template': """
-我打算以最新价格买入，在三个交易日内卖出。分析以下股票是否能够买入，返回结果可以是1:立即买入、-1:风险高于收益，不适合买入、0:当前不是买点需要观望这三种，请不要返回其他内容,仅返回对应的数字。    
+我打算以最新价格买入，在三个交易日内卖出。基于以下股票技术数据报告，评估数据质量和完整性，返回结果可以是1:数据质量良好可操作、-1:数据质量不佳建议观望、0:数据不充分需要更多观察这三种，请不要返回其他内容,仅返回对应的数字。
 
 股票代码: {stock_code}
-技术分析报告:
+技术数据报告:
 {technical_report}
 """,
-            'system_message': '你是一个专业的中国股票分析师。',
+            'system_message': '你是一个专业的中国股票数据分析师。',
             # 结果映射（确保符合项目规范）
-            'valid_scores': [1, -1, 0],  # 1:立即买入, -1:不适合买入, 0:观望等待
+            'valid_scores': [1, -1, 0],  # 1:数据质量良好, -1:数据质量不佳, 0:数据不充分
             'score_descriptions': {
-                1: '立即买入',
-                -1: '不适合买入', 
-                0: '观望等待'
+                1: '数据质量良好',
+                -1: '数据质量不佳',
+                0: '数据不充分'
             }
         }
     }
@@ -254,7 +254,7 @@ class IndicatorConfig:
                 'class': 'logging.handlers.RotatingFileHandler',
                 'level': 'DEBUG',
                 'formatter': 'detailed',
-                'filename': 'stock_analyzer.log',
+                'filename': 'aishare_txt.log',
                 'maxBytes': 10485760,  # 10MB
                 'backupCount': 5,
                 'encoding': 'utf-8'
@@ -263,34 +263,34 @@ class IndicatorConfig:
                 'class': 'logging.handlers.RotatingFileHandler',
                 'level': 'ERROR',
                 'formatter': 'detailed',
-                'filename': 'stock_analyzer_errors.log',
+                'filename': 'aishare_txt_errors.log',
                 'maxBytes': 10485760,  # 10MB
                 'backupCount': 3,
                 'encoding': 'utf-8'
             }
         },
         'loggers': {
-            'stock_analyzer': {
+            'aishare_txt': {
                 'level': 'DEBUG',
                 'handlers': ['file', 'error_file'],
                 'propagate': False
             },
-            'stock_analyzer.data_fetcher': {
+            'aishare_txt.data_fetcher': {
                 'level': 'DEBUG',
                 'handlers': ['file'],
                 'propagate': False
             },
-            'stock_analyzer.technical_indicators': {
+            'aishare_txt.technical_indicators': {
                 'level': 'DEBUG',
                 'handlers': ['file'],
                 'propagate': False
             },
-            'stock_analyzer.report_generator': {
+            'aishare_txt.report_generator': {
                 'level': 'DEBUG',
                 'handlers': ['file'],
                 'propagate': False
             },
-            'stock_analyzer.utils': {
+            'aishare_txt.utils': {
                 'level': 'DEBUG',
                 'handlers': ['file'],
                 'propagate': False

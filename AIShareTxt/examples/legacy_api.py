@@ -8,7 +8,7 @@
 """
 
 import warnings
-from ..core.analyzer import StockAnalyzer
+from ..core.data_processor import StockAnalyzer
 from ..utils.utils import Utils, LoggerManager
 
 warnings.filterwarnings('ignore')
@@ -213,7 +213,7 @@ def main():
     print("股票技术指标分析器 (兼容性版本)")
     print("=" * 50)
     print("注意：此版本使用重构后的模块化架构")
-    print("推荐使用新版本：python stock_analyzer.py")
+    print("推荐使用新版本：aishare <股票代码>")
     print("=" * 50)
     logger.info("启动兼容性版本分析器")
     

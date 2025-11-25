@@ -4,14 +4,13 @@ AIShareTxt核心模块
 包含股票分析器、数据获取器、报告生成器和配置管理等核心功能。
 """
 
-from .analyzer import StockAnalyzer
-from .data_fetcher import StockDataFetcher
-from .report_generator import ReportGenerator
+from .data_processor import StockDataProcessor
 from .config import IndicatorConfig
+# 向后兼容
+StockAnalyzer = StockDataProcessor
 
 __all__ = [
-    "StockAnalyzer",
-    "StockDataFetcher",
-    "ReportGenerator",
+    "StockDataProcessor",
+    "StockAnalyzer",  # 向后兼容
     "IndicatorConfig",
 ]

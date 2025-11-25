@@ -1,28 +1,28 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-重构后的股票分析器主模块
+股票数据处理与报告生成主模块
 作为协调器，整合数据获取、指标计算和报告生成功能
 """
 
 import warnings
-from .data_fetcher import StockDataFetcher
+from ..indicators.data_fetcher import StockDataFetcher
 from ..indicators.technical_indicators import TechnicalIndicators
-from .report_generator import ReportGenerator
+from ..indicators.report_generator import ReportGenerator
 from ..utils.utils import Logger, LoggerManager, Utils, DataValidator, ErrorHandler, PerformanceMonitor
 from .config import IndicatorConfig as Config
 
 warnings.filterwarnings('ignore')
 
 
-class StockAnalyzer:
-    """重构后的股票分析器主类"""
-    
+class StockDataProcessor:
+    """股票数据处理与报告生成主类"""
+
     def __init__(self):
-        """初始化分析器组件"""
+        """初始化数据处理组件"""
         # 初始化日志系统
         LoggerManager.setup_logging()
-        self.logger = LoggerManager.get_logger('stock_analyzer')
+        self.logger = LoggerManager.get_logger('aishare_txt')
         
         self.config = Config()
         self.data_fetcher = StockDataFetcher()
@@ -37,16 +37,16 @@ class StockAnalyzer:
         self.fund_flow_data = None
         self.indicators = None
         
-    def analyze_stock(self, stock_code, enable_performance_monitor=False):
+    def generate_stock_report(self, stock_code, enable_performance_monitor=False):
         """
-        分析指定股票的技术指标
-        
+        生成指定股票的数据报告
+
         Args:
             stock_code (str): 股票代码
             enable_performance_monitor (bool): 是否启用性能监控
-            
+
         Returns:
-            str: 分析报告
+            str: 数据报告
         """
         # 性能监控
         monitor = None
@@ -55,70 +55,70 @@ class StockAnalyzer:
             monitor.start()
         
         try:
-            self.logger.info(f"开始分析股票：{stock_code}")
-            
+            self.logger.info(f"开始处理股票数据：{stock_code}")
+
             # 验证股票代码
             if not self.utils.validate_stock_code(stock_code):
                 error_msg = "错误：股票代码格式不正确，请使用6位数字格式（如：000001）"
                 self.logger.error(error_msg)
                 return error_msg
-            
+
             self.stock_code = stock_code
-            
+
             # 步骤1：获取股票基本信息
             self.logger.info("步骤1/4：获取股票基本信息...")
             self.stock_info = self.data_fetcher.get_stock_basic_info(stock_code)
             if monitor:
                 monitor.checkpoint("获取基本信息")
-            
+
             # 步骤2：获取主力资金流数据
             self.logger.info("步骤2/4：获取主力资金流数据...")
             self.fund_flow_data = self.data_fetcher.get_fund_flow_data(stock_code)
             if monitor:
                 monitor.checkpoint("获取资金流数据")
-            
+
             # 步骤3：获取股票价格数据
             self.logger.info("步骤3/4：获取股票价格数据...")
             self.stock_data = self.data_fetcher.fetch_stock_data(stock_code)
-            
+
             if self.stock_data is None:
                 return f"{self.config.ERROR_MESSAGES['no_data']}: {stock_code}"
-            
+
             # 验证数据质量
             is_valid, error_msg = DataValidator.validate_price_data(self.stock_data)
             if not is_valid:
                 return f"数据质量验证失败: {error_msg}"
-            
+
             # 检查数据长度
             min_length = self.config.DATA_CONFIG.get('min_data_length', 250)
             is_sufficient, length_msg = self.utils.check_data_quality(self.stock_data, min_length)
             if not is_sufficient:
                 self.logger.warning(f"警告: {length_msg}")
-                
+
             if monitor:
                 monitor.checkpoint("获取价格数据")
-            
-            # 步骤4：计算技术指标
-            self.logger.info("步骤4/4：计算技术指标...")
-            self.indicators = self.indicators_calculator.calculate_all_indicators(self.stock_data)
-            
+
+            # 步骤4：处理技术指标
+            self.logger.info("步骤4/4：处理技术指标...")
+            self.indicators = self.indicators_calculator.process_all_indicators(self.stock_data)
+
             if self.indicators is None:
                 return f"{self.config.ERROR_MESSAGES['calculation_failed']}: 可能是数据不足"
-            
+
             # 验证指标数据
             is_valid, error_msg = DataValidator.validate_indicators(self.indicators)
             if not is_valid:
                 return f"指标验证失败: {error_msg}"
-            
+
             # 将资金流数据添加到指标中
             if self.fund_flow_data:
                 self.indicators.update(self.fund_flow_data)
-            
+
             if monitor:
                 monitor.checkpoint("计算技术指标")
-            
+
             # 生成报告
-            self.logger.info("生成分析报告...")
+            self.logger.info("生成数据报告...")
             report = self.report_generator.generate_report(
                 stock_code,
                 self.indicators,
@@ -133,23 +133,23 @@ class StockAnalyzer:
             return report
             
         except Exception as e:
-            error_context = f"分析股票 {stock_code}"
+            error_context = f"处理股票数据 {stock_code}"
             self.utils.log_error(e, error_context)
-            ErrorHandler.handle_api_error(e, "股票分析")
-            return f"分析过程中出错：{str(e)}"
+            ErrorHandler.handle_api_error(e, "股票数据处理")
+            return f"数据处理过程中出错：{str(e)}"
     
-    def quick_analyze(self, stock_code):
+    def generate_quick_report(self, stock_code):
         """
-        快速分析（不包含资金流数据，提高速度）
-        
+        快速生成数据报告（不包含资金流数据，提高速度）
+
         Args:
             stock_code (str): 股票代码
-            
+
         Returns:
-            str: 分析报告
+            str: 数据报告
         """
         try:
-            self.logger.info(f"快速分析股票：{stock_code}")
+            self.logger.info(f"快速生成股票数据报告：{stock_code}")
             
             # 验证股票代码
             if not self.utils.validate_stock_code(stock_code):
@@ -165,8 +165,8 @@ class StockAnalyzer:
             if self.stock_data is None:
                 return f"{self.config.ERROR_MESSAGES['no_data']}: {stock_code}"
             
-            # 计算技术指标
-            self.indicators = self.indicators_calculator.calculate_all_indicators(self.stock_data)
+            # 处理技术指标
+            self.indicators = self.indicators_calculator.process_all_indicators(self.stock_data)
             
             if self.indicators is None:
                 return f"{self.config.ERROR_MESSAGES['calculation_failed']}"
@@ -182,9 +182,9 @@ class StockAnalyzer:
             return report
             
         except Exception as e:
-            error_context = f"快速分析股票 {stock_code}"
+            error_context = f"快速生成股票数据报告 {stock_code}"
             self.utils.log_error(e, error_context)
-            return f"快速分析过程中出错：{str(e)}"
+            return f"快速报告生成过程中出错：{str(e)}"
     
     def get_current_indicators(self):
         """
@@ -261,10 +261,10 @@ class StockAnalyzer:
         else:
             return data
     
-    def validate_analysis_environment(self):
+    def validate_processing_environment(self):
         """
-        验证分析环境
-        
+        验证数据处理环境
+
         Returns:
             tuple: (是否通过验证, 错误消息列表)
         """
@@ -339,12 +339,12 @@ class StockAnalyzer:
         
         return indicators_info
     
-    def get_analysis_summary(self):
+    def get_processing_summary(self):
         """
-        获取分析摘要
-        
+        获取数据处理摘要
+
         Returns:
-            dict: 分析摘要信息
+            dict: 数据处理摘要信息
         """
         if not self.indicators:
             return None
@@ -364,16 +364,16 @@ class StockAnalyzer:
 
 def quick_test(stock_code):
     """快速测试单个股票的便捷函数"""
-    analyzer = StockAnalyzer()
-    logger = LoggerManager.get_logger('stock_analyzer')
+    processor = StockDataProcessor()
+    logger = LoggerManager.get_logger('aishare_txt')
     
     print(f"快速测试股票：{stock_code}")
     print(Utils.create_separator())
     logger.info(f"开始快速测试股票：{stock_code}")
     
     try:
-        # 验证分析环境
-        is_valid, errors = analyzer.validate_analysis_environment()
+        # 验证处理环境
+        is_valid, errors = processor.validate_processing_environment()
         if not is_valid:
             print("环境验证失败:")
             logger.error("环境验证失败")
@@ -381,24 +381,24 @@ def quick_test(stock_code):
                 print(f"  - {error}")
                 logger.error(f"环境错误: {error}")
             return False
+
+        # 执行数据处理
+        report = processor.generate_stock_report(stock_code, enable_performance_monitor=True)
         
-        # 执行分析
-        report = analyzer.analyze_stock(stock_code, enable_performance_monitor=True)
-        
-        # 检查分析结果是否为错误信息
-        if report and (report.startswith("错误：") or report.startswith("数据质量验证失败") or 
-                      report.startswith("指标验证失败") or report.startswith("分析过程中出错") or
-                      "无数据" in report or "计算失败" in report):
+        # 检查数据处理结果是否为错误信息
+        if report and (report.startswith("错误：") or report.startswith("数据质量验证失败") or
+                      report.startswith("指标验证失败") or report.startswith("数据处理过程中出错") or
+                      "无数据" in report or "处理失败" in report):
             print("\n" + report)
             logger.error(f"快速测试股票 {stock_code} 失败: {report}")
             return False
         
         print("\n" + report)
         
-        # 显示分析摘要
-        summary = analyzer.get_analysis_summary()
+        # 显示数据处理摘要
+        summary = processor.get_processing_summary()
         if summary:
-            print(f"\n分析摘要:")
+            print(f"\n数据处理摘要:")
             print(f"  数据点数: {summary['data_points']}")
             print(f"  指标数量: {summary['indicators_count']}")
             print(f"  包含资金流: {'是' if summary['has_fund_flow'] else '否'}")
@@ -419,19 +419,19 @@ def main():
     # 首先检查命令行参数（包括帮助参数）
     stock_code = utils.parse_command_line_args()
     if stock_code:
-        # 如果提供了股票代码，则初始化分析器并进行快速测试
-        analyzer = StockAnalyzer()
-        logger = LoggerManager.get_logger('stock_analyzer')
-        
-        print("股票技术指标分析器 (重构版)")
+        # 如果提供了股票代码，则初始化数据处理器并进行快速测试
+        processor = StockDataProcessor()
+        logger = LoggerManager.get_logger('aishare_txt')
+
+        print("股票数据报告生成器")
         print(utils.create_separator())
-        print("提示：可以在命令行直接运行 python stock_analyzer.py 000001 来快速测试")
-        logger.info("股票技术指标分析器启动")
+        print("提示：可以在命令行直接运行 aishare 000001 来快速测试")
+        logger.info("股票数据报告生成器启动")
         
-        # 验证分析环境
-        print("\n验证分析环境...")
-        logger.info("开始验证分析环境")
-        is_valid, errors = analyzer.validate_analysis_environment()
+        # 验证处理环境
+        print("\n验证处理环境...")
+        logger.info("开始验证处理环境")
+        is_valid, errors = processor.validate_processing_environment()
         if not is_valid:
             print("环境验证失败:")
             logger.error("环境验证失败")
@@ -452,18 +452,18 @@ def main():
         return
     
     # 如果没有提供命令行参数，则进入交互模式
-    analyzer = StockAnalyzer()
-    logger = LoggerManager.get_logger('stock_analyzer')
-    
-    print("股票技术指标分析器 (重构版)")
+    processor = StockDataProcessor()
+    logger = LoggerManager.get_logger('aishare_txt')
+
+    print("股票数据报告生成器")
     print(utils.create_separator())
-    print("提示：可以在命令行直接运行 python stock_analyzer.py 000001 来快速测试")
-    logger.info("股票技术指标分析器启动")
+    print("提示：可以在命令行直接运行 aishare 000001 来快速测试")
+    logger.info("股票数据报告生成器启动")
     
-    # 验证分析环境
-    print("\n验证分析环境...")
-    logger.info("开始验证分析环境")
-    is_valid, errors = analyzer.validate_analysis_environment()
+    # 验证处理环境
+    print("\n验证处理环境...")
+    logger.info("开始验证处理环境")
+    is_valid, errors = processor.validate_processing_environment()
     if not is_valid:
         print("环境验证失败:")
         logger.error("环境验证失败")
@@ -495,34 +495,34 @@ def main():
             
             logger.info(f"用户输入股票代码: {stock_code}")
             
-            # 询问分析模式
-            print("\n选择分析模式:")
-            print("1. 完整分析（包含基本信息和资金流）")
-            print("2. 快速分析（仅技术指标）")
-            
+            # 询问报告生成模式
+            print("\n选择报告生成模式:")
+            print("1. 完整报告（包含基本信息和资金流）")
+            print("2. 快速报告（仅技术指标）")
+
             mode_choice = utils.get_user_input("请选择模式 (1/2): ")
-            
+
             if mode_choice == '2':
-                print("\n执行快速分析...")
-                logger.info(f"开始快速分析股票: {stock_code}")
-                report = analyzer.quick_analyze(stock_code)
+                print("\n执行快速报告生成...")
+                logger.info(f"开始快速生成股票数据报告: {stock_code}")
+                report = processor.generate_quick_report(stock_code)
             else:
-                print("\n执行完整分析...")
-                logger.info(f"开始完整分析股票: {stock_code}")
-                report = analyzer.analyze_stock(stock_code, enable_performance_monitor=True)
+                print("\n执行完整报告生成...")
+                logger.info(f"开始完整生成股票数据报告: {stock_code}")
+                report = processor.generate_stock_report(stock_code, enable_performance_monitor=True)
             
             print("\n" + report)
             
-            # 显示分析摘要
-            summary = analyzer.get_analysis_summary()
+            # 显示数据处理摘要
+            summary = processor.get_processing_summary()
             if summary:
                 print(f"\n{utils.create_separator('-', 30)}")
-                print("分析摘要:")
+                print("数据处理摘要:")
                 print(f"  股票代码: {summary['stock_code']}")
                 print(f"  当前价格: {summary['current_price']:.2f}")
                 print(f"  数据点数: {summary['data_points']}")
                 print(f"  指标数量: {summary['indicators_count']}")
-                logger.info(f"分析完成 - {summary['stock_code']}: 数据点{summary['data_points']}, 指标{summary['indicators_count']}")
+                logger.info(f"数据处理完成 - {summary['stock_code']}: 数据点{summary['data_points']}, 指标{summary['indicators_count']}")
             
         except KeyboardInterrupt:
             if utils.handle_keyboard_interrupt():

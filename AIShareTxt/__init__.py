@@ -9,10 +9,14 @@ __version__ = "2025.11.24.26"
 __author__ = "AIShareTxt Team"
 
 # 导入核心类
-from .core.analyzer import StockAnalyzer
-from .core.data_fetcher import StockDataFetcher
-from .core.report_generator import ReportGenerator
+from .core.data_processor import StockDataProcessor
 from .core.config import IndicatorConfig
+# 向后兼容
+StockAnalyzer = StockDataProcessor
+
+# 从indicators模块导入
+from .indicators.data_fetcher import StockDataFetcher
+from .indicators.report_generator import ReportGenerator
 
 # 导入技术指标
 from .indicators.technical_indicators import TechnicalIndicators
@@ -27,17 +31,18 @@ from .utils.stock_list import get_stock_list
 # 定义公共API
 __all__ = [
     # 核心类
-    "StockAnalyzer",
+    "StockDataProcessor",
+    "StockAnalyzer",  # 向后兼容
     "StockDataFetcher",
     "ReportGenerator",
     "IndicatorConfig",
-    
+
     # 技术指标
     "TechnicalIndicators",
-    
+
     # AI客户端
     "AIClient",
-    
+
     # 工具
     "Logger",
     "get_stock_list",

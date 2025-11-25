@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 """
 报告生成模块
-负责格式化和生成股票分析报告
+负责格式化和生成股票数据报告
 """
 
-from .config import IndicatorConfig as Config
+from ..core.config import IndicatorConfig as Config
 
 
 class ReportGenerator:
@@ -16,7 +16,7 @@ class ReportGenerator:
     
     def generate_report(self, stock_code, indicators, stock_info=None, stock_data=None):
         """
-        生成完整的股票分析报告
+        生成完整的股票数据报告
 
         Args:
             stock_code (str): 股票代码
@@ -28,7 +28,7 @@ class ReportGenerator:
             str: 格式化的报告文本
         """
         if indicators is None:
-            return "无法生成指标报告：数据不足"
+            return "无法生成数据报告：数据不足"
         
         report = []
         

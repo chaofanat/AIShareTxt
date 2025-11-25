@@ -11,7 +11,7 @@ import numpy as np
 import pandas_market_calendars as mcal
 from typing import Optional, Union, cast
 from datetime import datetime, timedelta, time
-from .config import IndicatorConfig as Config
+from ..core.config import IndicatorConfig as Config
 from ..utils.utils import LoggerManager
 import warnings
 warnings.filterwarnings('ignore')

@@ -3,16 +3,16 @@
 [![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://python.org)
 [![License](https://img.shields.io/badge/license-MulanPSL2-blue.svg)](LICENSE)
 
-**专业的股票技术指标分析工具包**
+**专业的股票数据处理与报告生成工具**
 
-AIShareTxt是一个功能强大的Python股票技术指标分析工具包，提供全面的股票数据获取、技术指标计算、AI智能分析和详细报告生成功能。
+AIShareTxt是一个功能强大的Python股票数据处理工具包，提供全面的股票数据获取、技术指标处理、AI数据处理建议和详细数据报告生成功能。
 
 ## ✨ 主要功能
 
 - 📊 **股票数据获取** - 基于akshare，支持多数据源获取实时和历史数据
 - 📈 **技术指标计算** - 基于TA-Lib，支持50+种技术指标计算
-- 🤖 **AI智能分析** - 集成DeepSeek和智谱AI，提供智能投资建议
-- 📋 **详细报告生成** - 自动生成专业的股票分析报告
+- 🤖 **AI数据处理建议** - 集成DeepSeek和智谱AI，提供数据质量处理建议
+- 📋 **详细报告生成** - 自动生成专业的股票数据报告
 - 🔧 **模块化设计** - 清晰的模块结构，易于扩展和定制
 - ⚡ **高性能计算** - 优化的算法，支持批量处理
 
@@ -43,6 +43,7 @@ pip install aishare-txt
 - `TA-Lib>=0.4.26` - 技术指标计算（**需先系统级安装 TA-Lib 二进制库，详见下方提示**）
 - `pandas>=1.5.0` - 数据处理
 - `numpy>=1.21.0` - 数值计算
+- `scipy>=1.9.0` - 科学计算，用于OBV能量潮指标的极值检测
 - `requests>=2.28.0` - HTTP请求
 - `openai>=1.0.0` - AI分析（可选）
 - `zhipuai>=2.0.0` - AI分析（可选）
@@ -63,13 +64,13 @@ pip install aishare-txt
 ### 基本使用
 
 ```python
-from AIShareTxt import StockAnalyzer
+from AIShareTxt import StockDataProcessor
 
-# 创建分析器实例
-analyzer = StockAnalyzer()
+# 创建数据处理器实例
+processor = StockDataProcessor()
 
-# 分析股票（直接返回报告文本）
-report = analyzer.analyze_stock("000001")  # 平安银行
+# 生成股票数据报告（直接返回报告文本）
+report = processor.generate_stock_report("000001")  # 平安银行
 print(report)
 ```
 
@@ -83,6 +84,45 @@ report = analyze_stock("000001")
 print(report)
 ```
 
+### 命令行使用
+
+安装完成后，可以在终端中使用 `aishare` 命令：
+
+```bash
+# 分析指定股票
+aishare 000001        # 分析平安银行
+aishare 600036        # 分析招商银行
+aishare 603259        # 分析药明康德
+
+# 显示帮助信息
+aishare --help
+aishare -h
+
+# 交互模式（不带参数运行）
+aishare
+```
+
+**命令行参数说明：**
+- `[股票代码]` - 要分析的6位股票代码
+- `-h, --help` - 显示帮助信息
+- 不带参数运行将进入交互模式，可以输入股票代码进行分析
+
+**交互模式示例：**
+```bash
+$ aishare
+股票数据报告生成器
+============================================================
+提示：可以在命令行直接运行 aishare 000001 来快速测试
+
+验证处理环境...
+环境验证通过
+
+============================================================
+请输入股票代码（如：000001，输入 'quit' 退出）：000001
+
+# [显示完整的股票数据报告]
+```
+
 ### AI智能分析
 
 ```python
@@ -91,13 +131,13 @@ from AIShareTxt.ai.client import AIClient
 # 创建AI客户端（需要配置API密钥）
 ai_client = AIClient(api_key="your_api_key", provider="deepseek")
 
-# 进行AI分析
+# 进行AI数据处理建议
 if ai_client.is_available():
-    advice = ai_client.analyze_investment_recommendation(
-        technical_report="技术分析报告内容",
+    advice = ai_client.generate_data_processing_recommendation(
+        technical_report="技术数据报告内容",
         stock_code="000001"
     )
-    print(f"AI投资建议: {ai_client.get_recommendation_text(advice)}")
+    print(f"AI数据处理建议: {ai_client.get_recommendation_text(advice)}")
 else:
     print("AI功能不可用，请检查API配置")
 ```
@@ -109,7 +149,7 @@ from AIShareTxt.indicators.technical_indicators import TechnicalIndicators
 import pandas as pd
 import numpy as np
 
-# 创建技术指标计算器
+# 创建技术指标数据处理器
 ti = TechnicalIndicators()
 
 # 准备股票数据（OHLCV格式）
@@ -121,8 +161,8 @@ data = pd.DataFrame({
     'volume': [1000, 1200, 800, 1500, 900]
 })
 
-# 计算所有技术指标
-indicators = ti.calculate_all_indicators(data)
+# 处理所有技术指标
+indicators = ti.process_all_indicators(data)
 
 # 计算单个指标
 bias = ti.calculate_bias(data['close'], timeperiod=20)
@@ -144,15 +184,15 @@ print(stocks.head())
 
 ```
 AIShareTxt/
-├── core/                      # 核心功能模块
-│   ├── analyzer.py           # 股票分析器（主要入口）
-│   ├── data_fetcher.py       # 数据获取器
-│   ├── report_generator.py   # 报告生成器
+├── core/                      # 核心协调层
+│   ├── data_processor.py     # 股票数据处理器（主要入口协调器）
 │   └── config.py             # 配置管理
-├── ai/                        # AI分析模块
+├── indicators/                # 技术指标处理层
+│   ├── technical_indicators.py # 技术指标计算
+│   ├── data_fetcher.py       # 股票数据获取
+│   └── report_generator.py   # 技术指标报告生成
+├── ai/                        # AI数据处理建议模块
 │   └── client.py             # AI客户端
-├── indicators/                # 技术指标模块
-│   └── technical_indicators.py # 技术指标计算
 ├── utils/                     # 工具模块
 │   ├── utils.py              # 通用工具类
 │   └── stock_list.py         # 股票列表工具
@@ -263,13 +303,13 @@ AIShareTxt/
    # 使用智谱AI
    ai_client = AIClient(provider="zhipuai")
    
-   # 进行AI分析
+   # 进行AI数据处理建议
    if ai_client.is_available():
-       advice = ai_client.analyze_investment_recommendation(
-           technical_report="技术分析报告内容",
+       advice = ai_client.generate_data_processing_recommendation(
+           technical_report="技术数据报告内容",
            stock_code="000001"
        )
-       print(f"AI投资建议: {ai_client.get_recommendation_text(advice)}")
+       print(f"AI数据处理建议: {ai_client.get_recommendation_text(advice)}")
    else:
        print("AI功能不可用，请检查API配置")
    ```
@@ -336,17 +376,17 @@ pytest
 from AIShareTxt import StockAnalyzer
 
 def analyze_example():
-    """完整的股票分析示例"""
+    """完整的股票数据处理示例"""
 
-    # 1. 创建分析器
-    analyzer = StockAnalyzer()
+    # 1. 创建数据处理器
+    processor = StockDataProcessor()
 
-    # 2. 分析指定股票
+    # 2. 处理指定股票数据
     stock_code = "000001"  # 平安银行
-    report = analyzer.analyze_stock(stock_code)
+    report = processor.generate_stock_report(stock_code)
 
-    # 3. 输出分析报告
-    print(f"股票 {stock_code} 分析报告：")
+    # 3. 输出数据报告
+    print(f"股票 {stock_code} 数据报告：")
     print("=" * 60)
     print(report)
 
@@ -359,10 +399,10 @@ if __name__ == "__main__":
 
 ```python
 from AIShareTxt.utils.stock_list import get_stock_list
-from AIShareTxt import StockAnalyzer
+from AIShareTxt import StockDataProcessor
 
 def batch_analysis():
-    """批量分析示例"""
+    """批量数据处理示例"""
 
     # 获取股票列表
     stocks = get_stock_list()
@@ -370,22 +410,22 @@ def batch_analysis():
         print("无法获取股票列表")
         return
 
-    # 分析前5只股票
-    analyzer = StockAnalyzer()
+    # 处理前5只股票
+    processor = StockDataProcessor()
 
     for idx, stock in stocks.head(5).iterrows():
         stock_code = stock['代码']
         stock_name = stock['名称']
 
-        print(f"\n分析 {stock_name} ({stock_code})...")
+        print(f"\n处理 {stock_name} ({stock_code}) 数据...")
         print("=" * 50)
 
         try:
-            report = analyzer.analyze_stock(stock_code)
+            report = processor.generate_stock_report(stock_code)
             print(report)
 
         except Exception as e:
-            print(f"  分析失败: {e}")
+            print(f"  数据处理失败: {e}")
 
 batch_analysis()
 ```
@@ -406,7 +446,7 @@ batch_analysis()
 
 ## ⚠️ 免责声明
 
-本工具提供的所有信息仅供参考，不构成投资建议。投资有风险，入市需谨慎。
+本工具提供的所有信息均为客观的数据处理结果，仅供参考，不构成投资建议。投资有风险，入市需谨慎。
 
 ## 📞 联系方式
 

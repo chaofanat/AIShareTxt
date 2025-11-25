@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-技术指标计算模块
-负责计算各种技术指标
+技术指标数据处理模块
+负责计算和处理各种技术指标数据
 """
 
 import talib
@@ -15,19 +15,19 @@ warnings.filterwarnings('ignore')
 
 
 class TechnicalIndicators:
-    """技术指标计算器"""
+    """技术指标数据处理器"""
     
     def __init__(self):
         self.config = Config()
         self.logger = LoggerManager.get_logger('technical_indicators')
     
-    def calculate_all_indicators(self, data):
+    def process_all_indicators(self, data):
         """
-        计算所有技术指标
-        
+        处理所有技术指标数据
+
         Args:
             data (pd.DataFrame): 股票数据
-            
+
         Returns:
             dict: 包含所有指标的字典
         """
@@ -43,14 +43,14 @@ class TechnicalIndicators:
         
         indicators = {}
         
-        # 计算各类指标
-        indicators.update(self._calculate_moving_averages(close))
-        indicators.update(self._calculate_ma_derived_indicators(close))
-        indicators.update(self._calculate_volume_price_indicators(high, low, close, volume))
-        indicators.update(self._calculate_trend_strength_indicators(high, low, close))
-        indicators.update(self._calculate_momentum_oscillators(high, low, close))
-        indicators.update(self._calculate_volatility_indicators(high, low, close))
-        indicators.update(self._calculate_volume_indicators(volume))
+        # 处理各类指标
+        indicators.update(self._process_moving_averages(close))
+        indicators.update(self._process_ma_derived_indicators(close))
+        indicators.update(self._process_volume_price_indicators(high, low, close, volume))
+        indicators.update(self._process_trend_strength_indicators(high, low, close))
+        indicators.update(self._process_momentum_oscillators(high, low, close))
+        indicators.update(self._process_volatility_indicators(high, low, close))
+        indicators.update(self._process_volume_indicators(volume))
         
         # 添加基础数据
         indicators['current_price'] = close[-1]
@@ -63,7 +63,7 @@ class TechnicalIndicators:
         
         return indicators
     
-    def _calculate_moving_averages(self, close):
+    def _process_moving_averages(self, close):
         """计算移动平均线指标"""
         indicators = {}
         
@@ -97,7 +97,7 @@ class TechnicalIndicators:
         
         return indicators
     
-    def _calculate_ma_derived_indicators(self, close):
+    def _process_ma_derived_indicators(self, close):
         """计算均线衍生指标"""
         indicators = {}
         
@@ -139,7 +139,7 @@ class TechnicalIndicators:
         
         return indicators
     
-    def _calculate_volume_price_indicators(self, high, low, close, volume):
+    def _process_volume_price_indicators(self, high, low, close, volume):
         """计算量价指标"""
         indicators = {}
         
@@ -174,7 +174,7 @@ class TechnicalIndicators:
         
         return indicators
     
-    def _calculate_trend_strength_indicators(self, high, low, close):
+    def _process_trend_strength_indicators(self, high, low, close):
         """计算趋势强度指标"""
         indicators = {}
         
@@ -202,7 +202,7 @@ class TechnicalIndicators:
         
         return indicators
     
-    def _calculate_momentum_oscillators(self, high, low, close):
+    def _process_momentum_oscillators(self, high, low, close):
         """计算动量振荡指标"""
         indicators = {}
         
@@ -231,7 +231,7 @@ class TechnicalIndicators:
         
         return indicators
     
-    def _calculate_volatility_indicators(self, high, low, close):
+    def _process_volatility_indicators(self, high, low, close):
         """计算波动率指标"""
         indicators = {}
         
@@ -247,7 +247,7 @@ class TechnicalIndicators:
         
         return indicators
     
-    def _calculate_volume_indicators(self, volume):
+    def _process_volume_indicators(self, volume):
         """计算成交量指标"""
         indicators = {}
         
