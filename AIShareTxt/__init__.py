@@ -63,6 +63,6 @@ def analyze_stock(symbol, period="1y", use_ai=False, ai_provider="deepseek"):
         分析结果字典
     """
     analyzer = StockAnalyzer()
-    return analyzer.analyze_stock(symbol)
+    return analyzer.generate_stock_report(symbol)
 
 
