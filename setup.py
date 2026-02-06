@@ -42,7 +42,7 @@ dev_requires = read_requirements("requirements-dev.txt")
 
 setup(
     name="aishare-txt",
-    version="2025.11.25.33",
+    version="2026.02.06.37",
     author="AIShareTxt Team",
     author_email="chaofanat@gmail.com",
     description="中国股票技术指标文本生成工具包，用于为金融分析相关领域的AI智能体提供上下文服务。",
