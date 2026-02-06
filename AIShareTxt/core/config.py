@@ -141,10 +141,25 @@ class IndicatorConfig:
         'default_period': 'daily',
         'default_adjust': 'qfq',    # 前复权
         'required_columns': ['date', 'open', 'close', 'high', 'low', 'volume'],
-        'min_data_length': 60,      # 最少需要60个交易日数据
-        'default_months_back': 4    # 默认获取往前推4个月的数据
+        'min_data_length': 90,      # 最少需要90个交易日数据（支持时空维度分析）
+        'default_months_back': 6    # 默认获取往前推6个月的数据（确保有足够数据）
     }
-    
+
+    # 时空维度分析配置
+    SPATIAL_TEMPORAL_CONFIG = {
+        'high_low_lookback_days': 60,      # 前高前低回溯天数
+        'fibonacci_sequence': [3, 5, 8, 13, 21, 34, 55, 89, 144],  # 斐波那契数列
+        'fibonacci_window_threshold': 2,   # 临近窗口判定阈值（±N日）
+    }
+
+    # 量能环比配置
+    VOLUME_COMPARISON_CONFIG = {
+        'short_ma_period': 5,              # 短期均量周期
+        'medium_ma_period': 20,            # 中期均量周期
+        'high_volume_threshold': 1.2,      # 高位量能阈值（倍数）
+        'low_volume_threshold': 0.8,       # 低位量能阈值（倍数）
+    }
+
     # 列名映射
     COLUMN_MAPPING = {
         '日期': 'date',

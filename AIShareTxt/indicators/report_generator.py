@@ -47,6 +47,10 @@ class ReportGenerator:
         report.extend(self._generate_volatility_section(indicators))
         report.extend(self._generate_fund_flow_section(indicators))
         report.extend(self._generate_trend_strength_section(indicators))
+        report.extend(self._generate_spatial_temporal_section(indicators))
+        report.extend(self._generate_volume_comparison_section(indicators))
+        report.extend(self._generate_consecutive_days_section(indicators))
+        report.extend(self._generate_fibonacci_section(indicators))
         report.extend(self._generate_summary_section(indicators))
 
         # 最近5天OLHCV数据
@@ -63,7 +67,7 @@ class ReportGenerator:
         header = []
         header.append(self.config.REPORT_CONFIG['title_separator'])
         header.append(f"股票代码：{stock_code}")
-        header.append(f"分析日期：{indicators.get('date', 'N/A')}")
+        header.append(f"数据日期：{indicators.get('date', 'N/A')}")
         header.append(f"当前价格：{indicators.get('current_price', 0):.{self.config.DISPLAY_PRECISION['price']}f} 元")
         header.append(self.config.REPORT_CONFIG['title_separator'])
         return header
@@ -71,7 +75,7 @@ class ReportGenerator:
     def _generate_basic_info_section(self, stock_info):
         """生成基本信息部分"""
         section = []
-        section.append("\n【股票基本信息】")
+        section.append("\n【一、股票基本信息】")
         section.append(self.config.REPORT_CONFIG['section_separator'])
         section.append(f"股票简称：{stock_info.get('股票简称', '未知')}")
         section.append(f"所属行业：{stock_info.get('行业', '未知')}")
@@ -279,7 +283,7 @@ class ReportGenerator:
     def _generate_summary_section(self, indicators):
         """生成指标状态汇总部分"""
         section = []
-        section.append("\n【九、指标状态汇总】")
+        section.append("\n【十三、指标状态汇总】")
         section.append(self.config.REPORT_CONFIG['section_separator'])
         
         summary = self._collect_summary_items(indicators)
@@ -317,7 +321,7 @@ class ReportGenerator:
     def _generate_ma_pattern_analysis(self, indicators):
         """生成均线形态分析"""
         section = []
-        section.append("\n均线形态分析:")
+        section.append("\n均线形态统计:")
         
         pattern_keys = ['trend_pattern', 'cross_pattern', 'position_pattern', 
                        'arrangement_pattern', 'support_resistance']
@@ -511,7 +515,7 @@ class ReportGenerator:
     def _generate_fund_flow_analysis(self, indicators, has_fund_data, has_5day_data):
         """生成资金流向分析"""
         section = []
-        section.append("\n资金流向分析:")
+        section.append("\n资金流向统计:")
         
         if has_fund_data:
             section.extend(self._analyze_current_fund_flow(indicators))
@@ -790,7 +794,7 @@ class ReportGenerator:
     def _generate_recent_ohlcv_section(self, stock_data):
         """生成最近5天OLHCV数据部分"""
         section = []
-        section.append("\n【十、最近5天交易数据】")
+        section.append("\n【十四、最近5天交易数据】")
         section.append(self.config.REPORT_CONFIG['section_separator'])
 
         # 获取最近5天数据
@@ -843,3 +847,138 @@ class ReportGenerator:
             section.append(line)
 
         return section
+
+    def _generate_spatial_temporal_section(self, indicators):
+        """生成时空维度分析部分"""
+        section = []
+        section.append("\n【九、时空维度数据】")
+        section.append(self.config.REPORT_CONFIG['section_separator'])
+
+        # 距前高前低分析
+        if 'recent_high_price' in indicators:
+            section.append("距前高前低统计:")
+            section.append(f"  近{self.config.SPATIAL_TEMPORAL_CONFIG['high_low_lookback_days']}日前高:     {indicators.get('recent_high_price', 0):.2f} 元 ({indicators.get('recent_high_date', 'N/A')})")
+
+            space_high = indicators.get('space_to_high_yuan', 0)
+            space_high_pct = indicators.get('space_to_high_pct', 0)
+            if space_high > 0:
+                section.append(f"  距前高空间:     {space_high:.2f} 元 (+{space_high_pct:.2f}%)")
+            elif space_high < 0:
+                section.append(f"  距前高空间:     {-space_high:.2f} 元 ({space_high_pct:.2f}%)")
+            else:
+                section.append(f"  距前高空间:     {space_high:.2f} 元 ({space_high_pct:.2f}%)")
+
+            section.append(f"  近{self.config.SPATIAL_TEMPORAL_CONFIG['high_low_lookback_days']}日前低:     {indicators.get('recent_low_price', 0):.2f} 元 ({indicators.get('recent_low_date', 'N/A')})")
+
+            gain_low = indicators.get('gain_from_low_yuan', 0)
+            gain_low_pct = indicators.get('gain_from_low_pct', 0)
+            if gain_low > 0:
+                section.append(f"  距前低涨幅:     {gain_low:.2f} 元 (+{gain_low_pct:.2f}%)")
+            elif gain_low < 0:
+                section.append(f"  距前低跌幅:     {-gain_low:.2f} 元 ({gain_low_pct:.2f}%)")
+            else:
+                section.append(f"  距前低涨幅:     {gain_low:.2f} 元 ({gain_low_pct:.2f}%)")
+
+        return section
+
+    def _generate_volume_comparison_section(self, indicators):
+        """生成量能环比分析部分"""
+        section = []
+        section.append("\n【十、量能环比数据】")
+        section.append(self.config.REPORT_CONFIG['section_separator'])
+
+        if 'volume_current_wan' in indicators:
+            section.append("成交量环比:")
+            section.append(f"  当日成交量:     {indicators.get('volume_current_wan', 0):.1f} 万手")
+
+            if 'volume_yesterday_wan' in indicators:
+                yoy = indicators.get('volume_change_yoy', 0)
+                sign = '+' if yoy > 0 else ''
+                section.append(f"  前一交易日:     {indicators.get('volume_yesterday_wan', 0):.1f} 万手 (环比: {sign}{yoy:.2f}%)")
+
+            if 'volume_5d_avg_wan' in indicators:
+                vs_5d = indicators.get('volume_vs_5d_avg', 0)
+                sign = '+' if vs_5d > 0 else ''
+                section.append(f"  5日均量:        {indicators.get('volume_5d_avg_wan', 0):.1f} 万手 (较5日均量: {sign}{vs_5d:.2f}%)")
+
+            if 'volume_20d_avg_wan' in indicators:
+                vs_20d = indicators.get('volume_vs_20d_avg', 0)
+                sign = '+' if vs_20d > 0 else ''
+                section.append(f"  20日均量:       {indicators.get('volume_20d_avg_wan', 0):.1f} 万手 (较20日均量: {sign}{vs_20d:.2f}%)")
+
+            if 'volume_level' in indicators:
+                section.append(f"  量能位置:       {indicators.get('volume_level', '正常')}")
+
+        return section
+
+    def _generate_consecutive_days_section(self, indicators):
+        """生成连续涨跌日统计部分"""
+        section = []
+        section.append("\n【十一、时间连续性统计】")
+        section.append(self.config.REPORT_CONFIG['section_separator'])
+
+        # 获取连续上涨和下跌数据
+        up_days = indicators.get('consecutive_up_days', 0)
+        down_days = indicators.get('consecutive_down_days', 0)
+
+        section.append("连续涨跌统计:")
+
+        if up_days > 0:
+            up_start = indicators.get('consecutive_up_start_price', 0)
+            up_gain = indicators.get('consecutive_up_gain_pct', 0)
+            current_price = indicators.get('current_price', 0)
+            sign = '+' if up_gain >= 0 else ''
+            section.append(f"  连续上涨日数:   {up_days} 日")
+            section.append(f"  连续上涨涨幅:   {sign}{up_gain:.2f}% ({up_start:.2f} → {current_price:.2f})")
+        elif down_days > 0:
+            down_start = indicators.get('consecutive_down_start_price', 0)
+            down_loss = indicators.get('consecutive_down_loss_pct', 0)
+            current_price = indicators.get('current_price', 0)
+            sign = '+' if down_loss >= 0 else ''
+            section.append(f"  连续下跌日数:   {down_days} 日")
+            section.append(f"  连续下跌跌幅:   {sign}{down_loss:.2f}% ({down_start:.2f} → {current_price:.2f})")
+        else:
+            section.append(f"  当前状态:       无明显连续涨跌")
+
+        return section
+
+    def _generate_fibonacci_section(self, indicators):
+        """生成斐波那契时间窗口部分"""
+        section = []
+        section.append("\n【十二、斐波那契时间窗口】")
+        section.append(self.config.REPORT_CONFIG['section_separator'])
+
+        if 'fib_start_date' not in indicators:
+            section.append("暂无斐波那契窗口数据")
+            return section
+
+        section.append("斐波那契时间窗口:")
+        section.append(f"  计算起点:       {indicators.get('fib_start_date', 'N/A')} (低点 {indicators.get('fib_start_price', 0):.2f} 元)")
+        section.append(f"  起点至今日:     {indicators.get('days_from_start', 0)} 日")
+
+        # 解析窗口状态
+        fib_windows = indicators.get('fib_windows', {})
+        if fib_windows:
+            section.append("  变盘窗口状态:")
+
+            fib_sequence = self.config.SPATIAL_TEMPORAL_CONFIG['fibonacci_sequence']
+
+            for fib_num in fib_sequence:
+                key = f'F{fib_num}'
+                if key in fib_windows:
+                    status = fib_windows[key]
+                    days_from_start = indicators.get('days_from_start', 0)
+
+                    if status == 'passed':
+                        section.append(f"    {key}: 已通过")
+                    elif status == 'future':
+                        days_to = fib_num - days_from_start
+                        section.append(f"    {key}: 未来{days_to}日")
+
+        # 临近窗口预警
+        if indicators.get('fib_near_window', False):
+            nearest = indicators.get('fib_nearest_window', '')
+            section.append(f"  ⚠️ 变盘预警: 当前距离{nearest}窗口，需关注变盘可能")
+
+        return section
+

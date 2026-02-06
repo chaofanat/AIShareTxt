@@ -33,16 +33,16 @@ class TechnicalIndicators:
         """
         if data is None or len(data) == 0:
             return None
-            
+
         # 获取价格数据
         close = data['close'].values
         high = data['high'].values
         low = data['low'].values
         volume = data['volume'].values
         open_price = data['open'].values
-        
+
         indicators = {}
-        
+
         # 处理各类指标
         indicators.update(self._process_moving_averages(close))
         indicators.update(self._process_ma_derived_indicators(close))
@@ -51,7 +51,7 @@ class TechnicalIndicators:
         indicators.update(self._process_momentum_oscillators(high, low, close))
         indicators.update(self._process_volatility_indicators(high, low, close))
         indicators.update(self._process_volume_indicators(volume))
-        
+
         # 添加基础数据
         indicators['current_price'] = close[-1]
         # 将日期转换为字符串格式以便JSON序列化
@@ -60,7 +60,22 @@ class TechnicalIndicators:
             indicators['date'] = date_value.strftime('%Y-%m-%d')
         else:
             indicators['date'] = str(date_value)
-        
+
+        # 添加时空维度分析数据
+        spatial_temporal = self.calculate_spatial_temporal(data, close[-1])
+        if spatial_temporal:
+            indicators.update(spatial_temporal)
+
+        # 添加量能环比数据
+        volume_comparison = self.calculate_volume_comparison(data, volume[-1])
+        if volume_comparison:
+            indicators.update(volume_comparison)
+
+        # 添加连续涨跌日统计数据
+        consecutive_days = self.calculate_consecutive_days(data)
+        if consecutive_days:
+            indicators.update(consecutive_days)
+
         return indicators
     
     def _process_moving_averages(self, close):
@@ -540,3 +555,258 @@ class TechnicalIndicators:
         except Exception as e:
             print(f"OBV背离检测错误: {e}")
             return "背离检测失败"
+
+    def calculate_spatial_temporal(self, df: pd.DataFrame, current_price: float) -> dict:
+        """
+        计算时空维度分析数据
+
+        Args:
+            df: 历史数据DataFrame
+            current_price: 当前价格
+
+        Returns:
+            dict: 包含前高前低、斐波那契窗口、连续涨跌日等数据
+        """
+        result = {}
+        config = self.config.SPATIAL_TEMPORAL_CONFIG
+
+        try:
+            # 确保有足够的数据
+            lookback_days = min(config['high_low_lookback_days'], len(df) - 1)
+            if lookback_days < 5:
+                return result
+
+            # 获取回溯范围内的数据
+            recent_data = df.iloc[-lookback_days:]
+
+            # 1. 计算距前高前低的空间分析
+            high_idx = recent_data['high'].idxmax()
+            low_idx = recent_data['low'].idxmin()
+
+            # 前高分析
+            result['recent_high_price'] = float(recent_data['high'].max())
+            high_date = df.loc[high_idx, 'date'] if 'date' in df.columns else high_idx
+            result['recent_high_date'] = high_date.strftime('%Y-%m-%d') if hasattr(high_date, 'strftime') else str(high_date)
+            result['space_to_high_yuan'] = round(result['recent_high_price'] - current_price, 2)
+            result['space_to_high_pct'] = round((result['recent_high_price'] / current_price - 1) * 100, 2)
+
+            # 前低分析
+            result['recent_low_price'] = float(recent_data['low'].min())
+            low_date = df.loc[low_idx, 'date'] if 'date' in df.columns else low_idx
+            result['recent_low_date'] = low_date.strftime('%Y-%m-%d') if hasattr(low_date, 'strftime') else str(low_date)
+            result['gain_from_low_yuan'] = round(current_price - result['recent_low_price'], 2)
+            result['gain_from_low_pct'] = round((current_price / result['recent_low_price'] - 1) * 100, 2)
+
+            # 2. 斐波那契时间窗口分析
+            fib_result = self._calculate_fibonacci_windows(df, current_price)
+            result.update(fib_result)
+
+        except Exception as e:
+            self.logger.warning(f"时空维度分析计算失败：{str(e)}")
+
+        return result
+
+    def _calculate_fibonacci_windows(self, df: pd.DataFrame, current_price: float) -> dict:
+        """
+        计算斐波那契时间窗口
+
+        Args:
+            df: 历史数据DataFrame
+            current_price: 当前价格
+
+        Returns:
+            dict: 包含斐波那契窗口分析数据
+        """
+        result = {}
+        config = self.config.SPATIAL_TEMPORAL_CONFIG
+
+        try:
+            # 获取斐波那契数列
+            fib_sequence = config['fibonacci_sequence']
+            window_threshold = config['fibonacci_window_threshold']
+
+            # 寻找趋势起点（近期重要低点）
+            close_data = df['close'].values
+            n = len(close_data)
+
+            if n < 10:
+                return result
+
+            # 使用局部极值检测寻找近期低点（取最近30个交易日内）
+            search_range = min(30, n // 2)
+            recent_close = close_data[-search_range:]
+
+            # 找到最低点作为起点
+            min_idx_in_recent = np.argmin(recent_close)
+            fib_start_idx = n - search_range + min_idx_in_recent
+
+            fib_start_price = float(close_data[fib_start_idx])
+            fib_start_date = df.loc[fib_start_idx, 'date'] if 'date' in df.columns else fib_start_idx
+            fib_start_date_str = fib_start_date.strftime('%Y-%m-%d') if hasattr(fib_start_date, 'strftime') else str(fib_start_date)
+
+            # 计算起点至今的天数
+            days_from_start = n - 1 - fib_start_idx
+
+            result['fib_start_date'] = fib_start_date_str
+            result['fib_start_price'] = round(fib_start_price, 2)
+            result['days_from_start'] = int(days_from_start)
+
+            # 计算各斐波那契窗口状态
+            fib_windows = {}
+            nearest_window = None
+            nearest_distance = float('inf')
+
+            for fib_num in fib_sequence:
+                if days_from_start >= fib_num:
+                    # 已通过的窗口
+                    fib_windows[f'F{fib_num}'] = 'passed'
+                else:
+                    # 未来的窗口
+                    days_to_window = fib_num - days_from_start
+                    if days_to_window <= nearest_distance:
+                        nearest_distance = days_to_window
+                        nearest_window = f'F{fib_num}'
+                    fib_windows[f'F{fib_num}'] = 'future'
+
+            result['fib_windows'] = fib_windows
+
+            # 判断是否临近窗口
+            is_near_window = nearest_distance <= window_threshold
+            result['fib_near_window'] = bool(is_near_window)
+
+            if nearest_window:
+                result['fib_nearest_window'] = f'{nearest_window}(距{nearest_distance}日)'
+
+        except Exception as e:
+            self.logger.warning(f"斐波那契窗口计算失败：{str(e)}")
+
+        return result
+
+    def calculate_volume_comparison(self, df: pd.DataFrame, current_volume: float) -> dict:
+        """
+        计算成交量环比数据
+
+        Args:
+            df: 历史数据DataFrame
+            current_volume: 当日成交量（手）
+
+        Returns:
+            dict: 包含较前日、5日均量、20日均量的环比数据
+        """
+        result = {}
+        config = self.config.VOLUME_COMPARISON_CONFIG
+
+        try:
+            volume_data = df['volume'].values
+            n = len(volume_data)
+
+            if n < 2:
+                return result
+
+            # 当日成交量（转换为万手）
+            result['volume_current_wan'] = round(current_volume / 10000, 1)
+
+            # 前一日成交量
+            result['volume_yesterday_wan'] = round(volume_data[-2] / 10000, 1)
+            result['volume_change_yoy'] = round((current_volume / volume_data[-2] - 1) * 100, 2)
+
+            # 5日均量
+            short_period = config['short_ma_period']
+            if n >= short_period + 1:
+                volume_5d_avg = np.mean(volume_data[-short_period-1:-1])
+                result['volume_5d_avg_wan'] = round(volume_5d_avg / 10000, 1)
+                result['volume_vs_5d_avg'] = round((current_volume / volume_5d_avg - 1) * 100, 2)
+
+            # 20日均量
+            medium_period = config['medium_ma_period']
+            if n >= medium_period + 1:
+                volume_20d_avg = np.mean(volume_data[-medium_period-1:-1])
+                result['volume_20d_avg_wan'] = round(volume_20d_avg / 10000, 1)
+                result['volume_vs_20d_avg'] = round((current_volume / volume_20d_avg - 1) * 100, 2)
+
+            # 量能位置评级
+            if 'volume_5d_avg_wan' in result and result['volume_5d_avg_wan'] > 0:
+                ratio = current_volume / volume_5d_avg if volume_5d_avg > 0 else 1
+                if ratio >= config['high_volume_threshold']:
+                    result['volume_level'] = '高位'
+                elif ratio <= config['low_volume_threshold']:
+                    result['volume_level'] = '低位'
+                else:
+                    result['volume_level'] = '正常'
+            else:
+                result['volume_level'] = '正常'
+
+        except Exception as e:
+            self.logger.warning(f"量能环比计算失败：{str(e)}")
+
+        return result
+
+    def calculate_consecutive_days(self, df: pd.DataFrame) -> dict:
+        """
+        计算连续涨跌日统计数据
+
+        Args:
+            df: 历史数据DataFrame
+
+        Returns:
+            dict: 包含连续上涨日数、连续下跌日数、期间涨跌幅等数据
+        """
+        result = {}
+
+        try:
+            close_data = df['close'].values
+            n = len(close_data)
+
+            if n < 2:
+                return result
+
+            # 计算每日涨跌（1为涨，-1为跌，0为平）
+            changes = np.diff(close_data)
+
+            # 统计连续上涨日数（从最新日期往前数）
+            consecutive_up = 0
+            consecutive_up_start_price = close_data[-1]
+            for i in range(len(changes) - 1, -1, -1):
+                if changes[i] > 0:
+                    consecutive_up += 1
+                elif changes[i] < 0:
+                    break
+                # 如果涨跌幅为0，继续往前数
+
+            if consecutive_up > 0:
+                consecutive_up_start_idx = n - 1 - consecutive_up
+                consecutive_up_start_price = close_data[consecutive_up_start_idx] if consecutive_up_start_idx >= 0 else close_data[0]
+                consecutive_up_gain = ((close_data[-1] - consecutive_up_start_price) / consecutive_up_start_price * 100) if consecutive_up_start_price > 0 else 0
+                result['consecutive_up_days'] = consecutive_up
+                result['consecutive_up_start_price'] = round(consecutive_up_start_price, 2)
+                result['consecutive_up_gain_pct'] = round(consecutive_up_gain, 2)
+            else:
+                result['consecutive_up_days'] = 0
+                result['consecutive_up_start_price'] = round(close_data[-1], 2)
+                result['consecutive_up_gain_pct'] = 0.0
+
+            # 统计连续下跌日数（从最新日期往前数）
+            consecutive_down = 0
+            for i in range(len(changes) - 1, -1, -1):
+                if changes[i] < 0:
+                    consecutive_down += 1
+                elif changes[i] > 0:
+                    break
+                # 如果涨跌幅为0，继续往前数
+
+            if consecutive_down > 0:
+                consecutive_down_start_idx = n - 1 - consecutive_down
+                consecutive_down_start_price = close_data[consecutive_down_start_idx] if consecutive_down_start_idx >= 0 else close_data[0]
+                consecutive_down_loss = ((close_data[-1] - consecutive_down_start_price) / consecutive_down_start_price * 100) if consecutive_down_start_price > 0 else 0
+                result['consecutive_down_days'] = consecutive_down
+                result['consecutive_down_start_price'] = round(consecutive_down_start_price, 2)
+                result['consecutive_down_loss_pct'] = round(consecutive_down_loss, 2)
+            else:
+                result['consecutive_down_days'] = 0
+                result['consecutive_down_start_price'] = round(close_data[-1], 2)
+                result['consecutive_down_loss_pct'] = 0.0
+
+        except Exception as e:
+            self.logger.warning(f"连续涨跌日统计计算失败：{str(e)}")
+
+        return result
