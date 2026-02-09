@@ -856,28 +856,49 @@ class ReportGenerator:
 
         # 距前高前低分析
         if 'recent_high_price' in indicators:
+            is_new_high = indicators.get('is_new_high_today', False)
+            is_new_low = indicators.get('is_new_low_today', False)
+            lookback_days = self.config.SPATIAL_TEMPORAL_CONFIG['high_low_lookback_days']
+
             section.append("距前高前低统计:")
-            section.append(f"  近{self.config.SPATIAL_TEMPORAL_CONFIG['high_low_lookback_days']}日前高:     {indicators.get('recent_high_price', 0):.2f} 元 ({indicators.get('recent_high_date', 'N/A')})")
 
-            space_high = indicators.get('space_to_high_yuan', 0)
-            space_high_pct = indicators.get('space_to_high_pct', 0)
-            if space_high > 0:
-                section.append(f"  距前高空间:     {space_high:.2f} 元 (+{space_high_pct:.2f}%)")
-            elif space_high < 0:
-                section.append(f"  距前高空间:     {-space_high:.2f} 元 ({space_high_pct:.2f}%)")
+            # 高点分析 - 区分历史前高与今日创新高
+            if is_new_high:
+                # 今日创新高：分别显示历史前高和今日新高
+                section.append(f"  近{lookback_days}日历史前高: {indicators.get('recent_high_price', 0):.2f} 元 ({indicators.get('recent_high_date', 'N/A')})")
+                section.append(f"  今日创新高:      {indicators.get('new_high_today_price', 0):.2f} 元 ({indicators.get('new_high_today_date', 'N/A')}) ✓")
+                section.append("  突破状态:       ✓ 创新高 (已突破历史前高)")
             else:
-                section.append(f"  距前高空间:     {space_high:.2f} 元 ({space_high_pct:.2f}%)")
+                # 未创新高：显示距离前高的空间
+                section.append(f"  近{lookback_days}日前高:     {indicators.get('recent_high_price', 0):.2f} 元 ({indicators.get('recent_high_date', 'N/A')})")
 
-            section.append(f"  近{self.config.SPATIAL_TEMPORAL_CONFIG['high_low_lookback_days']}日前低:     {indicators.get('recent_low_price', 0):.2f} 元 ({indicators.get('recent_low_date', 'N/A')})")
+                space_high = indicators.get('space_to_high_yuan', 0)
+                space_high_pct = indicators.get('space_to_high_pct', 0)
+                if space_high > 0:
+                    section.append(f"  距前高空间:     {space_high:.2f} 元 (+{space_high_pct:.2f}%)")
+                elif space_high < 0:
+                    section.append(f"  距前高空间:     {-space_high:.2f} 元 ({space_high_pct:.2f}%)")
+                else:
+                    section.append(f"  距前高空间:     {space_high:.2f} 元 ({space_high_pct:.2f}%)")
 
-            gain_low = indicators.get('gain_from_low_yuan', 0)
-            gain_low_pct = indicators.get('gain_from_low_pct', 0)
-            if gain_low > 0:
-                section.append(f"  距前低涨幅:     {gain_low:.2f} 元 (+{gain_low_pct:.2f}%)")
-            elif gain_low < 0:
-                section.append(f"  距前低跌幅:     {-gain_low:.2f} 元 ({gain_low_pct:.2f}%)")
+            # 低点分析 - 区分历史前低与今日创新低
+            if is_new_low:
+                # 今日创新低：分别显示历史前低和今日新低
+                section.append(f"  近{lookback_days}日历史前低: {indicators.get('recent_low_price', 0):.2f} 元 ({indicators.get('recent_low_date', 'N/A')})")
+                section.append(f"  今日创新低:      {indicators.get('new_low_today_price', 0):.2f} 元 ({indicators.get('new_low_today_date', 'N/A')}) ✗")
+                section.append("  突破状态:       ✗ 创新低 (跌破历史前低)")
             else:
-                section.append(f"  距前低涨幅:     {gain_low:.2f} 元 ({gain_low_pct:.2f}%)")
+                # 未创新低：显示距离前低的涨幅
+                section.append(f"  近{lookback_days}日前低:     {indicators.get('recent_low_price', 0):.2f} 元 ({indicators.get('recent_low_date', 'N/A')})")
+
+                gain_low = indicators.get('gain_from_low_yuan', 0)
+                gain_low_pct = indicators.get('gain_from_low_pct', 0)
+                if gain_low > 0:
+                    section.append(f"  距前低涨幅:     {gain_low:.2f} 元 (+{gain_low_pct:.2f}%)")
+                elif gain_low < 0:
+                    section.append(f"  距前低跌幅:     {-gain_low:.2f} 元 ({gain_low_pct:.2f}%)")
+                else:
+                    section.append(f"  距前低涨幅:     {gain_low:.2f} 元 ({gain_low_pct:.2f}%)")
 
         return section
 

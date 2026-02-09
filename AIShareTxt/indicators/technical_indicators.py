@@ -576,26 +576,74 @@ class TechnicalIndicators:
             if lookback_days < 5:
                 return result
 
-            # 获取回溯范围内的数据
-            recent_data = df.iloc[-lookback_days:]
+            # 获取今日数据（最后一行）
+            today_data = df.iloc[-1]
+            today_high = float(today_data['high'])
+            today_low = float(today_data['low'])
+            today_date_str = today_data['date'].strftime('%Y-%m-%d') if hasattr(today_data['date'], 'strftime') else str(today_data['date'])
 
-            # 1. 计算距前高前低的空间分析
-            high_idx = recent_data['high'].idxmax()
-            low_idx = recent_data['low'].idxmin()
+            # 获取回溯范围内的历史数据（排除今日）
+            historical_data = df.iloc[-lookback_days:-1] if lookback_days > 1 else df.iloc[:-1]
 
-            # 前高分析
-            result['recent_high_price'] = float(recent_data['high'].max())
-            high_date = df.loc[high_idx, 'date'] if 'date' in df.columns else high_idx
-            result['recent_high_date'] = high_date.strftime('%Y-%m-%d') if hasattr(high_date, 'strftime') else str(high_date)
-            result['space_to_high_yuan'] = round(result['recent_high_price'] - current_price, 2)
-            result['space_to_high_pct'] = round((result['recent_high_price'] / current_price - 1) * 100, 2)
+            # 检测是否今日创新高/新低
+            if len(historical_data) > 0:
+                historical_high_max = float(historical_data['high'].max())
+                historical_low_min = float(historical_data['low'].min())
 
-            # 前低分析
-            result['recent_low_price'] = float(recent_data['low'].min())
-            low_date = df.loc[low_idx, 'date'] if 'date' in df.columns else low_idx
-            result['recent_low_date'] = low_date.strftime('%Y-%m-%d') if hasattr(low_date, 'strftime') else str(low_date)
-            result['gain_from_low_yuan'] = round(current_price - result['recent_low_price'], 2)
-            result['gain_from_low_pct'] = round((current_price / result['recent_low_price'] - 1) * 100, 2)
+                # 判断是否今日创新高
+                result['is_new_high_today'] = today_high > historical_high_max
+                result['is_new_low_today'] = today_low < historical_low_min
+
+                # 前高分析 - 使用历史数据的前高
+                result['recent_high_price'] = float(historical_data['high'].max())
+                high_idx = historical_data['high'].idxmax()
+                high_date = df.loc[high_idx, 'date'] if 'date' in df.columns else high_idx
+                result['recent_high_date'] = high_date.strftime('%Y-%m-%d') if hasattr(high_date, 'strftime') else str(high_date)
+
+                # 如果今日创新高，记录今日新高信息
+                if result['is_new_high_today']:
+                    result['new_high_today_price'] = today_high
+                    result['new_high_today_date'] = today_date_str
+
+                # 前低分析 - 使用历史数据的前低
+                result['recent_low_price'] = float(historical_data['low'].min())
+                low_idx = historical_data['low'].idxmin()
+                low_date = df.loc[low_idx, 'date'] if 'date' in df.columns else low_idx
+                result['recent_low_date'] = low_date.strftime('%Y-%m-%d') if hasattr(low_date, 'strftime') else str(low_date)
+
+                # 如果今日创新低，记录今日新低信息
+                if result['is_new_low_today']:
+                    result['new_low_today_price'] = today_low
+                    result['new_low_today_date'] = today_date_str
+
+                # 计算距历史前高的空间
+                result['space_to_high_yuan'] = round(result['recent_high_price'] - current_price, 2)
+                result['space_to_high_pct'] = round((result['recent_high_price'] / current_price - 1) * 100, 2)
+
+                # 计算距历史前低的涨幅
+                result['gain_from_low_yuan'] = round(current_price - result['recent_low_price'], 2)
+                result['gain_from_low_pct'] = round((current_price / result['recent_low_price'] - 1) * 100, 2)
+            else:
+                # 数据不足，使用包含今日的数据
+                recent_data = df.iloc[-lookback_days:]
+
+                high_idx = recent_data['high'].idxmax()
+                low_idx = recent_data['low'].idxmin()
+
+                result['recent_high_price'] = float(recent_data['high'].max())
+                high_date = df.loc[high_idx, 'date'] if 'date' in df.columns else high_idx
+                result['recent_high_date'] = high_date.strftime('%Y-%m-%d') if hasattr(high_date, 'strftime') else str(high_date)
+                result['space_to_high_yuan'] = round(result['recent_high_price'] - current_price, 2)
+                result['space_to_high_pct'] = round((result['recent_high_price'] / current_price - 1) * 100, 2)
+
+                result['recent_low_price'] = float(recent_data['low'].min())
+                low_date = df.loc[low_idx, 'date'] if 'date' in df.columns else low_idx
+                result['recent_low_date'] = low_date.strftime('%Y-%m-%d') if hasattr(low_date, 'strftime') else str(low_date)
+                result['gain_from_low_yuan'] = round(current_price - result['recent_low_price'], 2)
+                result['gain_from_low_pct'] = round((current_price / result['recent_low_price'] - 1) * 100, 2)
+
+                result['is_new_high_today'] = False
+                result['is_new_low_today'] = False
 
             # 2. 斐波那契时间窗口分析
             fib_result = self._calculate_fibonacci_windows(df, current_price)
