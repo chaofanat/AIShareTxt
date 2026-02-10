@@ -140,3 +140,7 @@ cython_debug/
 # Claude Code
 .claude/
 *.claude
+
+# Project specific
+logs/
+tests/scripts/

@@ -789,6 +789,145 @@ class TechnicalIndicators:
 
         return result
 
+    def calculate_limit_status(self, df: pd.DataFrame, stock_code: str) -> dict:
+        """
+        计算涨跌停状态
+
+        Args:
+            df: 历史数据DataFrame
+            stock_code: 股票代码
+
+        Returns:
+            dict: 包含涨跌停状态、当日涨跌幅等数据
+        """
+        result = {}
+        config = self.config.LIMIT_CONFIG
+
+        try:
+            if len(df) < 2:
+                return result
+
+            # 获取当日涨跌幅
+            today_data = df.iloc[-1]
+            pct_chg = today_data.get('pct_chg', 0)
+
+            # 如果没有涨跌幅数据，自己计算
+            if pd.isna(pct_chg) or pct_chg == 0:
+                prev_close = df.iloc[-2]['close']
+                current_close = today_data['close']
+                if prev_close > 0:
+                    pct_chg = (current_close / prev_close - 1) * 100
+                else:
+                    pct_chg = 0
+
+            # 判断是否为ST股票（股票代码包含ST）
+            is_st = 'ST' in stock_code
+
+            # 判断是否为科创板/创业板（以688、300、301开头）
+            is_star_board = stock_code.startswith('688') or stock_code.startswith('300') or stock_code.startswith('301')
+
+            # 根据股票类型确定涨跌停阈值
+            if is_st:
+                limit_up = config['st_limit_up_threshold']
+                limit_down = config['st_limit_down_threshold']
+            elif is_star_board:
+                limit_up = config['star_threshold']
+                limit_down = -config['star_threshold']
+            else:
+                limit_up = config['limit_up_threshold']
+                limit_down = config['limit_down_threshold']
+
+            # 判断涨跌停状态
+            if pct_chg >= limit_up:
+                limit_status = '涨停'
+            elif pct_chg <= limit_down:
+                limit_status = '跌停'
+            elif abs(pct_chg) <= config['normal_threshold']:
+                limit_status = '正常'
+            else:
+                limit_status = '正常'
+
+            result['limit_status'] = limit_status
+            result['daily_change_pct'] = round(pct_chg, 2)
+            result['is_limit_up'] = pct_chg >= limit_up
+            result['is_limit_down'] = pct_chg <= limit_down
+            result['is_normal'] = not result['is_limit_up'] and not result['is_limit_down']
+
+        except Exception as e:
+            self.logger.warning(f"涨跌停状态计算失败：{str(e)}")
+
+        return result
+
+    def calculate_turnover_and_volatility(self, df: pd.DataFrame) -> dict:
+        """
+        计算换手率数据和历史波动率
+
+        Args:
+            df: 历史数据DataFrame（需包含换手率列）
+
+        Returns:
+            dict: 包含换手率、换手率均值、历史波动率等数据
+        """
+        result = {}
+        config = self.config.TURNOVER_CONFIG
+
+        try:
+            n = len(df)
+            if n < 2:
+                return result
+
+            # 获取换手率数据
+            if 'turnover_rate' in df.columns:
+                turnover_data = df['turnover_rate'].values
+            else:
+                # 如果没有换手率数据，尝试从原始列名获取
+                if '换手率' in df.columns:
+                    turnover_data = df['换手率'].values
+                else:
+                    self.logger.warning("未找到换手率数据")
+                    return result
+
+            # 当日换手率
+            current_turnover = float(turnover_data[-1]) if not pd.isna(turnover_data[-1]) else 0.0
+            result['turnover_rate'] = round(current_turnover, 2)
+
+            # 计算各周期换手率均值
+            for period in config['ma_periods']:
+                if n >= period:
+                    # 取最近period天的数据（包含今日）
+                    recent_data = turnover_data[-period:]
+                    # 过滤NaN值
+                    valid_data = recent_data[~pd.isna(recent_data)]
+                    if len(valid_data) > 0:
+                        avg_turnover = float(np.mean(valid_data))
+                        result[f'turnover_avg_{period}d'] = round(avg_turnover, 2)
+                    else:
+                        result[f'turnover_avg_{period}d'] = 0.0
+                else:
+                    result[f'turnover_avg_{period}d'] = 0.0
+
+            # 计算历史波动率（年化）
+            volatility_period = min(config['volatility_period'], n)
+            if volatility_period >= 2:
+                # 获取收盘价数据
+                close_data = df['close'].values
+
+                # 计算日收益率
+                returns = np.diff(np.log(close_data[-volatility_period:]))
+
+                # 计算标准差作为波动率
+                volatility_daily = np.std(returns)
+
+                # 年化波动率（假设一年约250个交易日）
+                volatility_annual = volatility_daily * np.sqrt(250) * 100
+
+                result['volatility_annual'] = round(volatility_annual, 2)
+
+        except Exception as e:
+            self.logger.warning(f"换手率与波动率计算失败：{str(e)}")
+
+        return result
+
     def calculate_consecutive_days(self, df: pd.DataFrame) -> dict:
         """
         计算连续涨跌日统计数据

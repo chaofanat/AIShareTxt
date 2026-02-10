@@ -72,13 +72,13 @@ class StockDataProcessor:
                 monitor.checkpoint("获取基本信息")
 
             # 步骤2：获取主力资金流数据
-            self.logger.info("步骤2/4：获取主力资金流数据...")
+            self.logger.info("步骤2/5：获取主力资金流数据...")
             self.fund_flow_data = self.data_fetcher.get_fund_flow_data(stock_code)
             if monitor:
                 monitor.checkpoint("获取资金流数据")
 
             # 步骤3：获取股票价格数据
-            self.logger.info("步骤3/4：获取股票价格数据...")
+            self.logger.info("步骤3/5：获取股票价格数据...")
             self.stock_data = self.data_fetcher.fetch_stock_data(stock_code)
 
             if self.stock_data is None:
@@ -99,7 +99,7 @@ class StockDataProcessor:
                 monitor.checkpoint("获取价格数据")
 
             # 步骤4：处理技术指标
-            self.logger.info("步骤4/4：处理技术指标...")
+            self.logger.info("步骤4/5：处理技术指标...")
             self.indicators = self.indicators_calculator.process_all_indicators(self.stock_data)
 
             if self.indicators is None:
@@ -114,8 +114,21 @@ class StockDataProcessor:
             if self.fund_flow_data:
                 self.indicators.update(self.fund_flow_data)
 
+            # 计算涨跌停状态
+            limit_status = self.indicators_calculator.calculate_limit_status(self.stock_data, stock_code)
+            if limit_status:
+                self.indicators.update(limit_status)
+
+            # 计算换手率与波动率
+            turnover_volatility = self.indicators_calculator.calculate_turnover_and_volatility(self.stock_data)
+            if turnover_volatility:
+                self.indicators.update(turnover_volatility)
+
             if monitor:
                 monitor.checkpoint("计算技术指标")
+
+            # 步骤5：生成报告
+            self.logger.info("步骤5/5：生成数据报告...")
 
             # 生成报告
             self.logger.info("生成数据报告...")

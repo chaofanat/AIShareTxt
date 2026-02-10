@@ -51,6 +51,8 @@ class ReportGenerator:
         report.extend(self._generate_volume_comparison_section(indicators))
         report.extend(self._generate_consecutive_days_section(indicators))
         report.extend(self._generate_fibonacci_section(indicators))
+        report.extend(self._generate_limit_status_section(indicators))
+        report.extend(self._generate_turnover_volatility_section(indicators))
         report.extend(self._generate_summary_section(indicators))
 
         # 最近5天OLHCV数据
@@ -283,7 +285,7 @@ class ReportGenerator:
     def _generate_summary_section(self, indicators):
         """生成指标状态汇总部分"""
         section = []
-        section.append("\n【十三、指标状态汇总】")
+        section.append("\n【十五、指标状态汇总】")
         section.append(self.config.REPORT_CONFIG['section_separator'])
         
         summary = self._collect_summary_items(indicators)
@@ -794,7 +796,7 @@ class ReportGenerator:
     def _generate_recent_ohlcv_section(self, stock_data):
         """生成最近5天OLHCV数据部分"""
         section = []
-        section.append("\n【十四、最近5天交易数据】")
+        section.append("\n【十六、最近5天交易数据】")
         section.append(self.config.REPORT_CONFIG['section_separator'])
 
         # 获取最近5天数据
@@ -1000,6 +1002,57 @@ class ReportGenerator:
         if indicators.get('fib_near_window', False):
             nearest = indicators.get('fib_nearest_window', '')
             section.append(f"  ⚠️ 变盘预警: 当前距离{nearest}窗口，需关注变盘可能")
+
+        return section
+
+    def _generate_limit_status_section(self, indicators):
+        """生成涨跌停状态部分"""
+        section = []
+        section.append("\n【十三、涨跌停状态】")
+        section.append(self.config.REPORT_CONFIG['section_separator'])
+
+        if 'limit_status' in indicators:
+            section.append("涨跌停状态:")
+            section.append(f"  涨跌停状态: {indicators.get('limit_status', '未知')}")
+            section.append(f"  当日涨跌幅: {indicators.get('daily_change_pct', 0):+.{self.config.DISPLAY_PRECISION['percentage']}f}%")
+
+            is_limit_up = indicators.get('is_limit_up', False)
+            is_limit_down = indicators.get('is_limit_down', False)
+
+            if is_limit_up:
+                section.append(f"  是否触及涨跌停: 涨停")
+            elif is_limit_down:
+                section.append(f"  是否触及涨跌停: 跌停")
+            else:
+                section.append(f"  是否触及涨跌停: 否")
+        else:
+            section.append("暂无涨跌停状态数据")
+
+        return section
+
+    def _generate_turnover_volatility_section(self, indicators):
+        """生成换手率与波动率部分"""
+        section = []
+        section.append("\n【十四、换手率与波动率】")
+        section.append(self.config.REPORT_CONFIG['section_separator'])
+
+        if 'turnover_rate' in indicators:
+            section.append("换手率数据:")
+            section.append(f"  换手率: {indicators.get('turnover_rate', 0):.{self.config.DISPLAY_PRECISION['percentage']}f}%")
+
+            # 换手率均值
+            if 'turnover_avg_5d' in indicators:
+                section.append(f"  5日平均换手率: {indicators.get('turnover_avg_5d', 0):.{self.config.DISPLAY_PRECISION['percentage']}f}%")
+            if 'turnover_avg_10d' in indicators:
+                section.append(f"  10日平均换手率: {indicators.get('turnover_avg_10d', 0):.{self.config.DISPLAY_PRECISION['percentage']}f}%")
+            if 'turnover_avg_20d' in indicators:
+                section.append(f"  20日平均换手率: {indicators.get('turnover_avg_20d', 0):.{self.config.DISPLAY_PRECISION['percentage']}f}%")
+
+            # 历史波动率
+            if 'volatility_annual' in indicators:
+                section.append(f"  历史波动率(年化): {indicators.get('volatility_annual', 0):.{self.config.DISPLAY_PRECISION['percentage']}f}%")
+        else:
+            section.append("暂无换手率与波动率数据")
 
         return section
 
