@@ -160,6 +160,22 @@ class IndicatorConfig:
         'low_volume_threshold': 0.8,       # 低位量能阈值（倍数）
     }
 
+    # 涨跌停配置
+    LIMIT_CONFIG = {
+        'limit_up_threshold': 9.9,         # 涨停阈值（主板10%约为9.9%）
+        'limit_down_threshold': -9.9,      # 跌停阈值（主板-10%约为-9.9%）
+        'st_limit_up_threshold': 4.9,      # ST股票涨停阈值（5%约为4.9%）
+        'st_limit_down_threshold': -4.9,   # ST股票跌停阈值（-5%约为-4.9%）
+        'star_threshold': 19.9,            # 科创板/创业板涨跌停阈值（20%约为19.9%）
+        'normal_threshold': 0.5,           # 正常波动阈值（±0.5%以内视为正常）
+    }
+
+    # 换手率配置
+    TURNOVER_CONFIG = {
+        'ma_periods': [5, 10, 20],         # 换手率均线周期
+        'volatility_period': 60,           # 波动率计算周期（日）
+    }
+
     # 列名映射
     COLUMN_MAPPING = {
         '日期': 'date',
