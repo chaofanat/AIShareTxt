@@ -179,7 +179,7 @@ class IndicatorConfig:
     # 列名映射
     COLUMN_MAPPING = {
         '日期': 'date',
-        '开盘': 'open', 
+        '开盘': 'open',
         '收盘': 'close',
         '最高': 'high',
         '最低': 'low',
@@ -188,7 +188,9 @@ class IndicatorConfig:
         '振幅': 'amplitude',
         '涨跌幅': 'pct_chg',
         '涨跌额': 'change',
-        '换手率': 'turnover_rate'
+        '换手率': 'turnover_rate',
+        # 新浪API兼容：amount列是成交金额
+        'amount': 'turnover'
     }
     
     # 报告格式配置
