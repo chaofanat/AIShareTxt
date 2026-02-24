@@ -306,10 +306,15 @@ class StockDataFetcher:
                 adjust=adjust
             )
 
-            # amount列更名为turnover
+            # 新浪API现在返回的列名：
+            # - amount: 成交金额（元）→ 应映射为 turnover
+            # - turnover: 换手率（%）→ 应映射为 turnover_rate
+            # 注意：必须先处理 turnover 列，避免 amount 覆盖它
+            if 'turnover' in raw_data.columns:
+                raw_data.rename(columns={'turnover': 'turnover_rate'}, inplace=True)
             if 'amount' in raw_data.columns:
                 raw_data.rename(columns={'amount': 'turnover'}, inplace=True)
-            
+
             return cast(pd.DataFrame, raw_data)
         except Exception as e:
             self.logger.warning(f"[方法2] 新浪API获取失败：{str(e)}")
