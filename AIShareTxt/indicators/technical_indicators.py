@@ -751,25 +751,25 @@ class TechnicalIndicators:
             if n < 2:
                 return result
 
-            # 当日成交量（转换为万手）
-            result['volume_current_wan'] = round(current_volume / 10000, 1)
+            # 当日成交量（转换为万手：1手=100股，所以先除以100再除以10000）
+            result['volume_current_wan'] = round(current_volume / 100 / 10000, 1)
 
             # 前一日成交量
-            result['volume_yesterday_wan'] = round(volume_data[-2] / 10000, 1)
+            result['volume_yesterday_wan'] = round(volume_data[-2] / 100 / 10000, 1)
             result['volume_change_yoy'] = round((current_volume / volume_data[-2] - 1) * 100, 2)
 
             # 5日均量
             short_period = config['short_ma_period']
             if n >= short_period + 1:
                 volume_5d_avg = np.mean(volume_data[-short_period-1:-1])
-                result['volume_5d_avg_wan'] = round(volume_5d_avg / 10000, 1)
+                result['volume_5d_avg_wan'] = round(volume_5d_avg / 100 / 10000, 1)
                 result['volume_vs_5d_avg'] = round((current_volume / volume_5d_avg - 1) * 100, 2)
 
             # 20日均量
             medium_period = config['medium_ma_period']
             if n >= medium_period + 1:
                 volume_20d_avg = np.mean(volume_data[-medium_period-1:-1])
-                result['volume_20d_avg_wan'] = round(volume_20d_avg / 10000, 1)
+                result['volume_20d_avg_wan'] = round(volume_20d_avg / 100 / 10000, 1)
                 result['volume_vs_20d_avg'] = round((current_volume / volume_20d_avg - 1) * 100, 2)
 
             # 量能位置评级

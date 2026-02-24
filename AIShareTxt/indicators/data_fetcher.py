@@ -308,9 +308,11 @@ class StockDataFetcher:
 
             # 新浪API现在返回的列名：
             # - amount: 成交金额（元）→ 应映射为 turnover
-            # - turnover: 换手率（%）→ 应映射为 turnover_rate
+            # - turnover: 换手率（小数格式，0.2317 = 23.17%）→ 应转换为百分比后映射为 turnover_rate
             # 注意：必须先处理 turnover 列，避免 amount 覆盖它
             if 'turnover' in raw_data.columns:
+                # 新浪API的换手率是小数格式，需要转换为百分比（与东方财富保持一致）
+                raw_data['turnover'] = raw_data['turnover'] * 100
                 raw_data.rename(columns={'turnover': 'turnover_rate'}, inplace=True)
             if 'amount' in raw_data.columns:
                 raw_data.rename(columns={'amount': 'turnover'}, inplace=True)
