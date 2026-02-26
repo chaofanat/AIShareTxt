@@ -465,40 +465,141 @@ class StockDataFetcher:
     
     def get_stock_basic_info(self, stock_code):
         """
-        获取股票基本信息
-        
+        获取股票基本信息（支持降级机制）
+
+        降级策略：
+        1. 优先使用 akshare.stock_individual_info_em (东方财富 API)
+        2. 失败后降级到雪球 API 组合 (stock_individual_basic_info_xq + stock_individual_spot_xq)
+        3. 最终降级到默认值
+
         Args:
             stock_code (str): 股票代码
-            
+
         Returns:
             dict: 股票基本信息字典
         """
+        # 方案1: 尝试使用东方财富 API (原方案)
+        self.logger.info("正在获取股票基本信息...")
         try:
-            self.logger.info("正在获取股票基本信息...")
-            
-            # 获取个股信息
             df = ak.stock_individual_info_em(symbol=stock_code)
-            
-            # 创建字段映射
             info_dict = {}
             for i, row in df.iterrows():
                 key = str(row.iloc[0]).strip()
                 value = str(row.iloc[1]).strip()
                 info_dict[key] = value
-            
-            # 解析基本信息
             stock_info = self._parse_basic_info(info_dict, stock_code)
-            
-            # 格式化数值
             stock_info = self._format_market_values(stock_info)
-            
-            self.logger.info("✓ 股票基本信息获取成功")
+            self.logger.info("✓ 股票基本信息获取成功（东方财富 API）")
             return stock_info
-            
         except Exception as e:
-            self.logger.warning(f"获取股票基本信息失败：{str(e)}")
-            # 返回基础信息
-            return self._get_default_basic_info(stock_code)
+            self.logger.warning(f"东方财富 API 失败：{str(e)}")
+
+        # 方案2: 降级到雪球 API 组合
+        self.logger.info("尝试降级方案：雪球 API 组合...")
+        try:
+            stock_info = self._get_stock_basic_info_from_xq(stock_code)
+            if stock_info and stock_info.get('股票简称') != '未知':
+                self.logger.info("✓ 股票基本信息获取成功（雪球 API 降级）")
+                return stock_info
+        except Exception as e:
+            self.logger.warning(f"雪球 API 降级失败：{str(e)}")
+
+        # 方案3: 最终降级到默认值
+        self.logger.warning("所有数据源均失败，返回默认值")
+        return self._get_default_basic_info(stock_code)
+
+    def _get_stock_basic_info_from_xq(self, stock_code):
+        """
+        从雪球 API 获取股票基本信息（降级方案）
+
+        使用 stock_individual_basic_info_xq + stock_individual_spot_xq 组合获取数据
+
+        Args:
+            stock_code (str): 股票代码（6位数字）
+
+        Returns:
+            dict: 股票基本信息字典
+        """
+        # 转换代码格式：6xxx→SH, 0/3xxx→SZ
+        if stock_code.startswith('6'):
+            xq_code = f'SH{stock_code}'
+        else:
+            xq_code = f'SZ{stock_code}'
+
+        # API1: 获取基本信息（股票简称、行业）
+        basic_info = self._get_xq_basic_info(xq_code)
+
+        # API2: 获取实时行情（市值、市盈率等）
+        spot_info = self._get_xq_spot_info(xq_code)
+
+        # 合并数据
+        stock_info = {
+            '股票代码': stock_code,
+            '股票简称': basic_info.get('股票简称', '未知'),
+            '行业': basic_info.get('行业', '未知'),
+            '总市值': spot_info.get('总市值', 0),
+            '流通市值': spot_info.get('流通市值', 0),
+            '总股本': spot_info.get('流通股', 0),  # 雪球只有流通股
+            '流通股本': spot_info.get('流通股', 0),
+            '市盈率': spot_info.get('市盈率', '未知'),
+            '市净率': spot_info.get('市净率', '未知'),
+            '当前价格': spot_info.get('现价', 0),
+        }
+
+        # 格式化市值数据（转换为亿为单位）
+        stock_info = self._format_market_values(stock_info)
+
+        return stock_info
+
+    def _get_xq_basic_info(self, xq_code):
+        """从雪球获取基本信息（股票简称、行业）"""
+        import pandas as pd
+
+        df = ak.stock_individual_basic_info_xq(symbol=xq_code)
+
+        # 获取股票简称
+        name = '未知'
+        name_row = df[df['item'] == 'org_short_name_cn']
+        if not name_row.empty:
+            val = name_row.iloc[0]['value']
+            if pd.notna(val) and val:
+                name = val
+
+        # 获取行业
+        industry = '未知'
+        industry_row = df[df['item'] == 'affiliate_industry']
+        if not industry_row.empty:
+            val = industry_row.iloc[0]['value']
+            if isinstance(val, dict) and 'ind_name' in val:
+                industry = val['ind_name']
+
+        return {'股票简称': name, '行业': industry}
+
+    def _get_xq_spot_info(self, xq_code):
+        """从雪球获取实时行情（市值、市盈率等）"""
+        df = ak.stock_individual_spot_xq(symbol=xq_code)
+        data_dict = dict(zip(df['item'], df['value']))
+
+        # 提取市值相关数据
+        total_market_cap = self._safe_float_conversion(data_dict.get('资产净值/总市值', 0))
+        float_market_cap = self._safe_float_conversion(data_dict.get('流通值', 0))
+        float_shares = self._safe_float_conversion(data_dict.get('流通股', 0))
+
+        # 提取估值指标
+        pe_ratio = data_dict.get('市盈率(TTM)', '未知')
+        pb_ratio = data_dict.get('市净率', '未知')
+
+        # 提取当前价格
+        current_price = self._safe_float_conversion(data_dict.get('现价', 0))
+
+        return {
+            '总市值': total_market_cap,
+            '流通市值': float_market_cap,
+            '流通股': float_shares,
+            '市盈率': pe_ratio,
+            '市净率': pb_ratio,
+            '现价': current_price,
+        }
     
     def _determine_market(self, stock_code):
         """根据股票代码判断市场"""
