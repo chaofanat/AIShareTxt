@@ -287,12 +287,27 @@ class ReportGenerator:
         section = []
         section.append("\n【十五、指标状态汇总】")
         section.append(self.config.REPORT_CONFIG['section_separator'])
-        
+
         summary = self._collect_summary_items(indicators)
-        
+
+        # 去重：保持顺序但移除重复项
+        seen = set()
+        unique_summary = []
         for item in summary:
+            if item not in seen:
+                seen.add(item)
+                unique_summary.append(item)
+
+        # 如果有重复项，记录日志
+        if len(summary) != len(unique_summary):
+            from AIShareTxt.utils.logger import LoggerManager
+            logger = LoggerManager.get_logger('aishare_txt')
+            logger.warning(f"发现重复的汇总项：原始{len(summary)}项，去重后{len(unique_summary)}项")
+            logger.warning(f"重复项示例：{[item for item in summary if summary.count(item) > 1][:5]}")
+
+        for item in unique_summary:
             section.append(f"- {item}")
-        
+
         return section
     
     def _generate_footer(self):

@@ -10,7 +10,7 @@ import pandas as pd
 import numpy as np
 import pandas_market_calendars as mcal
 from typing import Optional, Union, cast
-from datetime import datetime, timedelta, time
+from datetime import datetime, timedelta, time, date
 from ..core.config import IndicatorConfig as Config
 from ..utils.utils import LoggerManager
 import warnings
@@ -73,9 +73,86 @@ class StockDataFetcher:
             # 如果无法判断，返回False（保守处理）
             return False
 
+    def _get_nearest_trading_date(self, input_date: date) -> Optional[date]:
+        """
+        获取指定日期最近的交易日（向前查找）
+
+        如果输入日期是交易日，返回该日期；
+        如果输入日期不是交易日，返回之前的最近交易日。
+
+        Args:
+            input_date: 要检查的日期
+
+        Returns:
+            datetime.date: 最近的交易日，失败返回None
+        """
+        try:
+            # 获取日期前后的交易日历（扩大范围以确保能获取到数据）
+            start_date = input_date - timedelta(days=30)  # 往前30天
+            end_date = input_date + timedelta(days=7)     # 往后7天
+
+            schedule = self.sse_calendar.schedule(start_date=start_date, end_date=end_date)
+
+            if schedule.empty:
+                self.logger.debug(f"无法获取 {start_date} 到 {end_date} 的交易日历")
+                return self._fallback_nearest_trading_date(input_date)
+
+            # 获取所有交易日并排序
+            trading_days = sorted(schedule.index.date)
+
+            # 从后往前找第一个 <= input_date 的交易日
+            for trading_day in reversed(trading_days):
+                if trading_day <= input_date:
+                    self.logger.debug(f"日期 {input_date} 的最近交易日是 {trading_day}")
+                    return trading_day
+
+            # 如果没找到，返回最后一个交易日
+            if trading_days:
+                last_trading_day = trading_days[-1]
+                self.logger.debug(f"日期 {input_date} 超出范围，返回最后一个交易日 {last_trading_day}")
+                return last_trading_day
+
+            return None
+
+        except Exception as e:
+            self.logger.warning(f"使用pandas_market_calendars获取最近交易日失败：{str(e)}")
+            return self._fallback_nearest_trading_date(input_date)
+
+    def _fallback_nearest_trading_date(self, input_date: date) -> Optional[date]:
+        """
+        备用的最近交易日获取方法（简单的周一到周五判断）
+
+        Args:
+            input_date: 要检查的日期
+
+        Returns:
+            datetime.date: 最近的交易日，失败返回None
+        """
+        try:
+            # 从输入日期开始向前查找
+            current_date = input_date
+            max_lookback = 7  # 最多往前查7天
+
+            for _ in range(max_lookback):
+                weekday = current_date.weekday()
+                if weekday < 5:  # 0-4 是周一到周五
+                    self.logger.debug(f"使用备用方法：日期 {input_date} 的最近交易日是 {current_date}")
+                    return current_date
+                current_date = current_date - timedelta(days=1)
+
+            # 如果7天内都是周末（理论上不可能），返回输入日期
+            self.logger.debug(f"备用方法未找到交易日，返回输入日期 {input_date}")
+            return input_date
+
+        except Exception as e:
+            self.logger.warning(f"备用方法获取最近交易日失败：{str(e)}")
+            return None
+
     def _is_trading_day(self, date_to_check) -> bool:
         """
         判断指定日期是否为交易日
+
+        通过获取最近交易日，判断其是否等于输入日期来判定。
 
         Args:
             date_to_check: 要检查的日期
@@ -84,46 +161,35 @@ class StockDataFetcher:
             bool: True表示是交易日，False表示非交易日
         """
         try:
-            # 获取日期前后的交易日历（扩大范围以确保能获取到数据）
-            start_date = date_to_check - timedelta(days=7)  # 往前7天
-            end_date = date_to_check + timedelta(days=7)    # 往后7天
+            # 获取最近的交易日
+            nearest_trading_date = self._get_nearest_trading_date(date_to_check)
 
-            schedule = self.sse_calendar.schedule(start_date=start_date, end_date=end_date)
+            if nearest_trading_date is None:
+                self.logger.debug(f"无法获取 {date_to_check} 的最近交易日")
+                return False
 
-            if schedule.empty:
-                self.logger.debug(f"无法获取 {start_date} 到 {end_date} 的交易日历")
-                return self._fallback_trading_day_check(date_to_check)
-
-            # 检查指定日期是否在交易日历中
-            trading_days = schedule.index.date
-            is_trading = date_to_check in trading_days
+            # 如果最近交易日等于输入日期，说明是交易日
+            is_trading = nearest_trading_date == date_to_check
 
             self.logger.debug(f"使用日历检查 {date_to_check}: {'是交易日' if is_trading else '非交易日'}")
             return is_trading
 
         except Exception as e:
-            self.logger.warning(f"使用pandas_market_calendars判断交易日失败：{str(e)}")
-            # 如果 pandas_market_calendars 失败，回退到简单的周一到周五判断
-            return self._fallback_trading_day_check(date_to_check)
-
-    def _fallback_trading_day_check(self, date_to_check) -> bool:
-        """
-        备用的交易日判断方法（简单的周一到周五判断）
-
-        Args:
-            date_to_check: 要检查的日期
-
-        Returns:
-            bool: True表示是交易日，False表示非交易日
-        """
-        weekday = date_to_check.weekday()
-        is_trading = weekday < 5  # 0-4 是周一到周五
-        self.logger.debug(f"使用备用方法检查 {date_to_check}: {'是交易日' if is_trading else '非交易日'}")
-        return is_trading
+            self.logger.warning(f"判断交易日失败：{str(e)}")
+            # 降级到简单的周一到周五判断
+            weekday = date_to_check.weekday()
+            is_trading = weekday < 5
+            self.logger.debug(f"使用备用方法检查 {date_to_check}: {'是交易日' if is_trading else '非交易日'}")
+            return is_trading
 
     def _remove_incomplete_trading_data(self, data: pd.DataFrame) -> pd.DataFrame:
         """
-        如果今天是交易日且已经开盘但是未收盘，移除最后一个不完整的交易日数据
+        如果今天是交易日且未收盘，且最后一行数据是今天的，移除它
+
+        修复说明：
+        - 东方财富API在盘中会返回当天不完整数据，需要移除
+        - 新浪/腾讯API在盘中不返回当天数据，最新数据是上一个交易日
+        - 因此必须先检查最后一行是否是今天，再决定是否移除
 
         Args:
             data: 股票数据DataFrame
@@ -132,11 +198,22 @@ class StockDataFetcher:
             处理后的DataFrame
         """
         if self._is_trading_day_and_not_closed():
-            self.logger.info("检测到当前为交易日且未收盘，移除最新不完整数据")
-            # 移除最后一行数据
+            # 检查最后一行是否是今天的数据
             if len(data) > 0:
-                data = data.iloc[:-1].copy()
-                self.logger.info(f"已移除最新数据，剩余 {len(data)} 条记录")
+                last_date = data['date'].iloc[-1]
+                if hasattr(last_date, 'date'):
+                    last_date = last_date.date()
+
+                today = datetime.now().date()
+
+                if last_date == today:
+                    self.logger.info("检测到今天的不完整数据，移除")
+                    data = data.iloc[:-1].copy()
+                    self.logger.info(f"已移除今天的不完整数据，剩余 {len(data)} 条记录")
+                else:
+                    self.logger.info(f"最新数据是 {last_date}（不是今天），不移除")
+            else:
+                self.logger.info("数据为空，无法移除")
         else:
             self.logger.debug("当前为非交易日或已收盘，保留所有数据")
 
@@ -412,19 +489,20 @@ class StockDataFetcher:
         # 处理数据
         return self._process_stock_data(raw_data, stock_code)
     
-    def get_fund_flow_data(self, stock_code):
+    def get_fund_flow_data(self, stock_code, target_date=None):
         """
         获取主力资金流数据
 
         Args:
             stock_code (str): 股票代码
+            target_date (datetime.date, optional): 目标日期。如果指定，将获取该日期的资金流数据。
+                                                  如果不指定，获取最新一天的数据。
 
         Returns:
             dict: 资金流数据字典
 
         Note:
-            akshare 的 stock_individual_fund_flow API 已经处理了交易日不完整数据的问题，
-            不需要额外移除当日数据
+            如果指定了 target_date，会优先获取该日期的数据，确保与股票数据日期一致。
         """
         try:
             self.logger.info("正在获取主力资金流数据...")
@@ -438,8 +516,65 @@ class StockDataFetcher:
                 fund_df = ak.stock_individual_fund_flow(stock=stock_code, market=market)
 
                 if fund_df is not None and len(fund_df) > 0:
-                    # 获取最新一天的数据
-                    latest_row = fund_df.iloc[-1]
+                    # 如果指定了目标日期，筛选该日期的数据
+                    if target_date is not None:
+                        # 统一日期格式进行比较
+                        matched_row = None
+                        for idx, row in fund_df.iterrows():
+                            row_date = row.get('日期')
+                            # 处理不同的日期格式
+                            if hasattr(row_date, 'date'):
+                                row_date = row_date.date()
+                            elif isinstance(row_date, str):
+                                try:
+                                    row_date = datetime.strptime(row_date, '%Y-%m-%d').date()
+                                except:
+                                    continue
+
+                            # 比较日期
+                            if row_date == target_date:
+                                matched_row = row
+                                self.logger.info(f"找到目标日期 {target_date} 的资金流数据")
+                                break
+
+                        # 如果没找到精确匹配，使用最接近的日期（<= target_date）
+                        if matched_row is None:
+                            self.logger.warning(f"未找到目标日期 {target_date} 的资金流数据，使用最接近的日期")
+                            # 从后往前找第一个 <= target_date 的数据
+                            for idx in range(len(fund_df) - 1, -1, -1):
+                                row = fund_df.iloc[idx]
+                                row_date = row.get('日期')
+                                if hasattr(row_date, 'date'):
+                                    row_date = row_date.date()
+                                elif isinstance(row_date, str):
+                                    try:
+                                        row_date = datetime.strptime(row_date, '%Y-%m-%d').date()
+                                    except:
+                                        continue
+
+                                if row_date <= target_date:
+                                    matched_row = row
+                                    self.logger.info(f"使用最接近日期 {row_date} 的资金流数据")
+                                    break
+
+                        if matched_row is not None:
+                            latest_row = matched_row
+                        else:
+                            # 如果都没找到，使用最早一天的数据（降级策略）
+                            earliest_row = fund_df.iloc[0]
+                            earliest_date = earliest_row.get('日期')
+                            if hasattr(earliest_date, 'date'):
+                                earliest_date = earliest_date.date()
+                            elif isinstance(earliest_date, str):
+                                try:
+                                    earliest_date = datetime.strptime(earliest_date, '%Y-%m-%d').date()
+                                except:
+                                    earliest_date = "未知"
+                            latest_row = earliest_row
+                            self.logger.warning(f"未找到 <= {target_date} 的资金流数据，使用最早可用日期 {earliest_date}")
+                    else:
+                        # 没有指定目标日期，获取最新一天的数据
+                        latest_row = fund_df.iloc[-1]
 
                     # 解析资金流数据
                     fund_flow_data = self._parse_fund_flow_data(latest_row)

@@ -66,19 +66,13 @@ class StockDataProcessor:
             self.stock_code = stock_code
 
             # 步骤1：获取股票基本信息
-            self.logger.info("步骤1/4：获取股票基本信息...")
+            self.logger.info("步骤1/5：获取股票基本信息...")
             self.stock_info = self.data_fetcher.get_stock_basic_info(stock_code)
             if monitor:
                 monitor.checkpoint("获取基本信息")
 
-            # 步骤2：获取主力资金流数据
-            self.logger.info("步骤2/5：获取主力资金流数据...")
-            self.fund_flow_data = self.data_fetcher.get_fund_flow_data(stock_code)
-            if monitor:
-                monitor.checkpoint("获取资金流数据")
-
-            # 步骤3：获取股票价格数据
-            self.logger.info("步骤3/5：获取股票价格数据...")
+            # 步骤2：获取股票价格数据（先获取股票数据，以确定最新交易日）
+            self.logger.info("步骤2/5：获取股票价格数据...")
             self.stock_data = self.data_fetcher.fetch_stock_data(stock_code)
 
             if self.stock_data is None:
@@ -95,8 +89,20 @@ class StockDataProcessor:
             if not is_sufficient:
                 self.logger.warning(f"警告: {length_msg}")
 
+            # 获取股票数据的最新日期
+            stock_latest_date = self.stock_data['date'].iloc[-1]
+            if hasattr(stock_latest_date, 'date'):
+                stock_latest_date = stock_latest_date.date()
+            self.logger.info(f"股票数据最新日期: {stock_latest_date}")
+
             if monitor:
                 monitor.checkpoint("获取价格数据")
+
+            # 步骤3：获取主力资金流数据（使用股票数据的最新日期）
+            self.logger.info("步骤3/5：获取主力资金流数据...")
+            self.fund_flow_data = self.data_fetcher.get_fund_flow_data(stock_code, target_date=stock_latest_date)
+            if monitor:
+                monitor.checkpoint("获取资金流数据")
 
             # 步骤4：处理技术指标
             self.logger.info("步骤4/5：处理技术指标...")
