@@ -687,54 +687,164 @@ class StockDataFetcher:
         return stock_info
 
     def _get_xq_basic_info(self, xq_code):
-        """从雪球获取基本信息（股票简称、行业）"""
+        """从雪球获取基本信息（股票简称、行业）
+
+        支持代理错误自动重试：
+        - 检测到代理错误时自动禁用代理并重试
+        - 检测到KeyError 'data'时提示可能是IP限流
+        """
         import pandas as pd
+        import requests
+        import os
 
-        df = ak.stock_individual_basic_info_xq(symbol=xq_code)
+        # 定义可能需要重试的异常类型
+        retry_exceptions = (
+            requests.exceptions.ProxyError,
+            requests.exceptions.SSLError,
+            KeyError,  # 雪球API返回403时的KeyError: 'data'
+            requests.exceptions.ConnectionError,
+        )
 
-        # 获取股票简称
-        name = '未知'
-        name_row = df[df['item'] == 'org_short_name_cn']
-        if not name_row.empty:
-            val = name_row.iloc[0]['value']
-            if pd.notna(val) and val:
-                name = val
+        for attempt in range(2):  # 最多尝试2次
+            try:
+                # 第一次尝试可能使用系统代理，第二次禁用代理
+                if attempt == 1:
+                    self.logger.info("检测到代理错误，尝试禁用代理后重试...")
+                    # 临时设置会话不使用代理
+                    import akshare.stock.cons as cons
+                    original_session = getattr(cons, '_session', None)
+                    # 创建新的无代理会话
+                    session = requests.Session()
+                    session.trust_env = False  # 禁用系统代理
+                    session.proxies = {'http': None, 'https': None}
+                    # 临时修改requests的默认行为
+                    original_get = requests.get
+                    requests.get = lambda *args, **kwargs: original_get(
+                        *args, proxies={'http': None, 'https': None}, **kwargs
+                    )
 
-        # 获取行业
-        industry = '未知'
-        industry_row = df[df['item'] == 'affiliate_industry']
-        if not industry_row.empty:
-            val = industry_row.iloc[0]['value']
-            if isinstance(val, dict) and 'ind_name' in val:
-                industry = val['ind_name']
+                try:
+                    df = ak.stock_individual_basic_info_xq(symbol=xq_code)
 
-        return {'股票简称': name, '行业': industry}
+                    # 获取股票简称
+                    name = '未知'
+                    name_row = df[df['item'] == 'org_short_name_cn']
+                    if not name_row.empty:
+                        val = name_row.iloc[0]['value']
+                        if pd.notna(val) and val:
+                            name = val
+
+                    # 获取行业
+                    industry = '未知'
+                    industry_row = df[df['item'] == 'affiliate_industry']
+                    if not industry_row.empty:
+                        val = industry_row.iloc[0]['value']
+                        if isinstance(val, dict) and 'ind_name' in val:
+                            industry = val['ind_name']
+
+                    return {'股票简称': name, '行业': industry}
+
+                finally:
+                    # 恢复原始的requests.get
+                    if attempt == 1:
+                        requests.get = original_get
+
+            except retry_exceptions as e:
+                if attempt == 0:
+                    # 第一次失败，记录日志并准备重试
+                    if isinstance(e, KeyError):
+                        self.logger.warning(f"雪球API返回格式异常(KeyError): {str(e)}")
+                        self.logger.info("可能原因: IP被限流(403)、代理设置问题、或API返回格式变化")
+                    else:
+                        self.logger.warning(f"雪球API请求失败(可能是代理问题): {type(e).__name__}: {str(e)}")
+                else:
+                    # 第二次也失败，抛出异常
+                    self.logger.error(f"雪球API重试后仍然失败: {type(e).__name__}: {str(e)}")
+                    self.logger.error("建议: 1)检查网络连接 2)检查系统代理设置 3)稍后重试")
+                    raise
+
+            except Exception as e:
+                # 其他异常不重试，直接抛出
+                self.logger.error(f"雪球API获取基本信息时发生未预期错误: {type(e).__name__}: {str(e)}")
+                raise
 
     def _get_xq_spot_info(self, xq_code):
-        """从雪球获取实时行情（市值、市盈率等）"""
-        df = ak.stock_individual_spot_xq(symbol=xq_code)
-        data_dict = dict(zip(df['item'], df['value']))
+        """从雪球获取实时行情（市值、市盈率等）
 
-        # 提取市值相关数据
-        total_market_cap = self._safe_float_conversion(data_dict.get('资产净值/总市值', 0))
-        float_market_cap = self._safe_float_conversion(data_dict.get('流通值', 0))
-        float_shares = self._safe_float_conversion(data_dict.get('流通股', 0))
+        支持代理错误自动重试：
+        - 检测到代理错误时自动禁用代理并重试
+        - 检测到KeyError 'data'时提示可能是IP限流
+        """
+        import requests
+        import pandas as pd
 
-        # 提取估值指标
-        pe_ratio = data_dict.get('市盈率(TTM)', '未知')
-        pb_ratio = data_dict.get('市净率', '未知')
+        # 定义可能需要重试的异常类型
+        retry_exceptions = (
+            requests.exceptions.ProxyError,
+            requests.exceptions.SSLError,
+            KeyError,  # 雪球API返回403时的KeyError: 'data'
+            requests.exceptions.ConnectionError,
+        )
 
-        # 提取当前价格
-        current_price = self._safe_float_conversion(data_dict.get('现价', 0))
+        for attempt in range(2):  # 最多尝试2次
+            try:
+                # 第一次尝试可能使用系统代理，第二次禁用代理
+                if attempt == 1:
+                    self.logger.info("检测到代理错误，尝试禁用代理后重试...")
+                    # 临时禁用代理
+                    original_get = requests.get
+                    requests.get = lambda *args, **kwargs: original_get(
+                        *args, proxies={'http': None, 'https': None}, **kwargs
+                    )
 
-        return {
-            '总市值': total_market_cap,
-            '流通市值': float_market_cap,
-            '流通股': float_shares,
-            '市盈率': pe_ratio,
-            '市净率': pb_ratio,
-            '现价': current_price,
-        }
+                try:
+                    df = ak.stock_individual_spot_xq(symbol=xq_code)
+                    data_dict = dict(zip(df['item'], df['value']))
+
+                    # 提取市值相关数据
+                    total_market_cap = self._safe_float_conversion(data_dict.get('资产净值/总市值', 0))
+                    float_market_cap = self._safe_float_conversion(data_dict.get('流通值', 0))
+                    float_shares = self._safe_float_conversion(data_dict.get('流通股', 0))
+
+                    # 提取估值指标
+                    pe_ratio = data_dict.get('市盈率(TTM)', '未知')
+                    pb_ratio = data_dict.get('市净率', '未知')
+
+                    # 提取当前价格
+                    current_price = self._safe_float_conversion(data_dict.get('现价', 0))
+
+                    return {
+                        '总市值': total_market_cap,
+                        '流通市值': float_market_cap,
+                        '流通股': float_shares,
+                        '市盈率': pe_ratio,
+                        '市净率': pb_ratio,
+                        '现价': current_price,
+                    }
+
+                finally:
+                    # 恢复原始的requests.get
+                    if attempt == 1:
+                        requests.get = original_get
+
+            except retry_exceptions as e:
+                if attempt == 0:
+                    # 第一次失败，记录日志并准备重试
+                    if isinstance(e, KeyError):
+                        self.logger.warning(f"雪球API返回格式异常(KeyError): {str(e)}")
+                        self.logger.info("可能原因: IP被限流(403)、代理设置问题、或API返回格式变化")
+                    else:
+                        self.logger.warning(f"雪球API请求失败(可能是代理问题): {type(e).__name__}: {str(e)}")
+                else:
+                    # 第二次也失败，抛出异常
+                    self.logger.error(f"雪球API重试后仍然失败: {type(e).__name__}: {str(e)}")
+                    self.logger.error("建议: 1)检查网络连接 2)检查系统代理设置 3)稍后重试")
+                    raise
+
+            except Exception as e:
+                # 其他异常不重试，直接抛出
+                self.logger.error(f"雪球API获取实时行情时发生未预期错误: {type(e).__name__}: {str(e)}")
+                raise
     
     def _determine_market(self, stock_code):
         """根据股票代码判断市场"""
