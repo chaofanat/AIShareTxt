@@ -5,9 +5,113 @@
 """
 
 import os
+import re
+
+
+# 多市场配置
+MARKET_CONFIGS = {
+    'CN': {  # 中国A股
+        'name': 'A股',
+        'code_length': 6,
+        'prefixes': ['0', '3', '6'],
+        'market_map': {'6': 'sh', '0': 'sz', '3': 'sz'},
+        'calendar': 'SSE',
+        'currency': 'CNY',
+        'currency_symbol': '¥',
+        'limit_up': 0.10,  # 10%涨跌停
+        'has_fund_flow': True,  # 有资金流数据
+        'description': '中国A股市场（上海、深圳）'
+    },
+    'HK': {  # 港股
+        'name': '港股',
+        'code_length': 5,
+        'prefixes': ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'],
+        'market_map': {},  # 港股不需要前缀映射
+        'calendar': 'HKEX',
+        'currency': 'HKD',
+        'currency_symbol': 'HK$',
+        'limit_up': None,  # 无涨跌停限制
+        'has_fund_flow': False,  # 无资金流数据
+        'description': '香港联合交易所'
+    }
+}
+
+# 股票代码模式（正则）
+STOCK_CODE_PATTERNS = {
+    'CN': r'^[0-3|6]\d{5}$',  # 6位数字，0/1/2/3/6开头
+    'HK': r'^\d{5}$'          # 5位数字
+}
+
 
 class IndicatorConfig:
     """股票数据处理配置类，包含所有硬编码的常量和阈值"""
+
+    @staticmethod
+    def identify_market(stock_code: str) -> str:
+        """
+        根据股票代码识别市场
+
+        Args:
+            stock_code: 股票代码
+
+        Returns:
+            str: 市场类型 ('CN', 'HK', 或 'UNKNOWN')
+        """
+        if not stock_code or not isinstance(stock_code, str):
+            return 'UNKNOWN'
+
+        stock_code = stock_code.strip()
+
+        # 港股：5位数字
+        if re.match(STOCK_CODE_PATTERNS['HK'], stock_code):
+            return 'HK'
+
+        # A股：6位数字
+        if re.match(STOCK_CODE_PATTERNS['CN'], stock_code):
+            return 'CN'
+
+        return 'UNKNOWN'
+
+    @staticmethod
+    def get_market_config(market: str) -> dict:
+        """
+        获取指定市场的配置
+
+        Args:
+            market: 市场类型 ('CN' 或 'HK')
+
+        Returns:
+            dict: 市场配置字典
+        """
+        return MARKET_CONFIGS.get(market, {})
+
+    @staticmethod
+    def get_currency_symbol(market: str) -> str:
+        """
+        获取指定市场的货币符号
+
+        Args:
+            market: 市场类型
+
+        Returns:
+            str: 货币符号
+        """
+        config = MARKET_CONFIGS.get(market, {})
+        return config.get('currency_symbol', '元')
+
+    @staticmethod
+    def has_fund_flow(market: str) -> bool:
+        """
+        判断指定市场是否有资金流数据
+
+        Args:
+            market: 市场类型
+
+        Returns:
+            bool: 是否有资金流数据
+        """
+        config = MARKET_CONFIGS.get(market, {})
+        return config.get('has_fund_flow', False)
     
     # 均线周期配置
     MA_PERIODS = {

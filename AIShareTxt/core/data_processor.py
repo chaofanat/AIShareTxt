@@ -23,16 +23,17 @@ class StockDataProcessor:
         # 初始化日志系统
         LoggerManager.setup_logging()
         self.logger = LoggerManager.get_logger('aishare_txt')
-        
+
         self.config = Config()
         self.data_fetcher = StockDataFetcher()
         self.indicators_calculator = TechnicalIndicators()
         self.report_generator = ReportGenerator()
         self.utils = Utils()
-        
+
         # 数据存储
         self.stock_data = None
         self.stock_code = None
+        self.market = None  # 市场类型 ('CN' 或 'HK')
         self.stock_info = None
         self.fund_flow_data = None
         self.indicators = None
@@ -42,7 +43,7 @@ class StockDataProcessor:
         生成指定股票的数据报告
 
         Args:
-            stock_code (str): 股票代码
+            stock_code (str): 股票代码（6位A股或5位港股）
             enable_performance_monitor (bool): 是否启用性能监控
 
         Returns:
@@ -53,30 +54,42 @@ class StockDataProcessor:
         if enable_performance_monitor:
             monitor = PerformanceMonitor()
             monitor.start()
-        
+
         try:
             self.logger.info(f"开始处理股票数据：{stock_code}")
 
+            # 识别市场
+            market = self.config.identify_market(stock_code)
+            self.logger.info(f"识别到市场: {market}")
+            market_config = self.config.get_market_config(market)
+            market_name = market_config.get('name', '未知')
+
             # 验证股票代码
             if not self.utils.validate_stock_code(stock_code):
-                error_msg = "错误：股票代码格式不正确，请使用6位数字格式（如：000001）"
+                error_msg = f"错误：股票代码格式不正确，请使用6位数字格式（如：000001）或5位数字格式（港股，如：00700）"
+                self.logger.error(error_msg)
+                return error_msg
+
+            if market == 'UNKNOWN':
+                error_msg = f"错误：无法识别股票代码 '{stock_code}' 所属的市场"
                 self.logger.error(error_msg)
                 return error_msg
 
             self.stock_code = stock_code
+            self.market = market
 
             # 步骤1：获取股票基本信息
             self.logger.info("步骤1/5：获取股票基本信息...")
-            self.stock_info = self.data_fetcher.get_stock_basic_info(stock_code)
+            self.stock_info = self.data_fetcher.get_stock_basic_info(stock_code, market=market)
             if monitor:
                 monitor.checkpoint("获取基本信息")
 
             # 步骤2：获取股票价格数据（先获取股票数据，以确定最新交易日）
             self.logger.info("步骤2/5：获取股票价格数据...")
-            self.stock_data = self.data_fetcher.fetch_stock_data(stock_code)
+            self.stock_data = self.data_fetcher.fetch_stock_data(stock_code, market=market)
 
             if self.stock_data is None:
-                return f"{self.config.ERROR_MESSAGES['no_data']}: {stock_code}"
+                return f"{self.config.ERROR_MESSAGES['no_data']}: {stock_code} ({market_name})"
 
             # 验证数据质量
             is_valid, error_msg = DataValidator.validate_price_data(self.stock_data)
@@ -99,10 +112,17 @@ class StockDataProcessor:
                 monitor.checkpoint("获取价格数据")
 
             # 步骤3：获取主力资金流数据（使用股票数据的最新日期）
-            self.logger.info("步骤3/5：获取主力资金流数据...")
-            self.fund_flow_data = self.data_fetcher.get_fund_flow_data(stock_code, target_date=stock_latest_date)
-            if monitor:
-                monitor.checkpoint("获取资金流数据")
+            # 港股不支持资金流数据
+            if self.config.has_fund_flow(market):
+                self.logger.info("步骤3/5：获取主力资金流数据...")
+                self.fund_flow_data = self.data_fetcher.get_fund_flow_data(stock_code, target_date=stock_latest_date, market=market)
+                if monitor:
+                    monitor.checkpoint("获取资金流数据")
+            else:
+                self.logger.info("步骤3/5：港股不支持资金流数据，跳过...")
+                self.fund_flow_data = {}
+                if monitor:
+                    monitor.checkpoint("跳过资金流数据")
 
             # 步骤4：处理技术指标
             self.logger.info("步骤4/5：处理技术指标...")
@@ -142,13 +162,14 @@ class StockDataProcessor:
                 stock_code,
                 self.indicators,
                 self.stock_info,
-                self.stock_data
+                self.stock_data,
+                market=market
             )
-            
+
             if monitor:
                 monitor.checkpoint("生成报告")
                 monitor.finish()
-            
+
             return report
             
         except Exception as e:
@@ -162,44 +183,55 @@ class StockDataProcessor:
         快速生成数据报告（不包含资金流数据，提高速度）
 
         Args:
-            stock_code (str): 股票代码
+            stock_code (str): 股票代码（6位A股或5位港股）
 
         Returns:
             str: 数据报告
         """
         try:
             self.logger.info(f"快速生成股票数据报告：{stock_code}")
-            
+
+            # 识别市场
+            market = self.config.identify_market(stock_code)
+            self.logger.info(f"识别到市场: {market}")
+
             # 验证股票代码
             if not self.utils.validate_stock_code(stock_code):
                 error_msg = "错误：股票代码格式不正确"
                 self.logger.error(error_msg)
                 return error_msg
-            
+
+            if market == 'UNKNOWN':
+                error_msg = f"错误：无法识别股票代码 '{stock_code}' 所属的市场"
+                self.logger.error(error_msg)
+                return error_msg
+
             self.stock_code = stock_code
-            
+            self.market = market
+
             # 获取股票价格数据
-            self.stock_data = self.data_fetcher.fetch_stock_data(stock_code)
-            
+            self.stock_data = self.data_fetcher.fetch_stock_data(stock_code, market=market)
+
             if self.stock_data is None:
                 return f"{self.config.ERROR_MESSAGES['no_data']}: {stock_code}"
-            
+
             # 处理技术指标
             self.indicators = self.indicators_calculator.process_all_indicators(self.stock_data)
-            
+
             if self.indicators is None:
                 return f"{self.config.ERROR_MESSAGES['calculation_failed']}"
-            
+
             # 生成报告（不包含基本信息和资金流）
             report = self.report_generator.generate_report(
                 stock_code,
                 self.indicators,
                 None,  # 不包含基本信息
-                self.stock_data
+                self.stock_data,
+                market=market
             )
-            
+
             return report
-            
+
         except Exception as e:
             error_context = f"快速生成股票数据报告 {stock_code}"
             self.utils.log_error(e, error_context)
@@ -367,9 +399,16 @@ class StockDataProcessor:
         """
         if not self.indicators:
             return None
-        
+
+        # 获取市场信息
+        market = self.market if hasattr(self, 'market') else 'CN'
+        market_config = self.config.get_market_config(market)
+        market_name = market_config.get('name', '未知')
+
         summary = {
             'stock_code': self.stock_code,
+            'market': market,
+            'market_name': market_name,
             'current_price': self.indicators.get('current_price', 0),
             'analysis_date': self.indicators.get('date', ''),
             'data_points': len(self.stock_data) if self.stock_data is not None else 0,
@@ -377,7 +416,7 @@ class StockDataProcessor:
             'has_fund_flow': '主力净流入额' in self.indicators,
             'has_basic_info': self.stock_info is not None
         }
-        
+
         return summary
 
 
@@ -444,7 +483,7 @@ def main():
 
         print("股票数据报告生成器")
         print(utils.create_separator())
-        print("提示：可以在命令行直接运行 aishare 000001 来快速测试")
+        print("提示：支持A股（6位）和港股（5位），如 aishare 000001 或 aishare 00700")
         logger.info("股票数据报告生成器启动")
         
         # 验证处理环境
@@ -476,7 +515,7 @@ def main():
 
     print("股票数据报告生成器")
     print(utils.create_separator())
-    print("提示：可以在命令行直接运行 aishare 000001 来快速测试")
+    print("提示：支持A股（6位）和港股（5位），如 aishare 000001 或 aishare 00700")
     logger.info("股票数据报告生成器启动")
     
     # 验证处理环境

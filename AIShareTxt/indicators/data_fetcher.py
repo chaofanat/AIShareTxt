@@ -23,12 +23,20 @@ class StockDataFetcher:
     def __init__(self):
         self.config = Config()
         self.logger = LoggerManager.get_logger('data_fetcher')
-        # 获取上交所（SSE）日历
-        self.sse_calendar = mcal.get_calendar('SSE')
+        # 初始化多个市场日历
+        self.calendars = {
+            'SSE': mcal.get_calendar('SSE'),   # 上交所（A股）
+            'HKEX': mcal.get_calendar('HKEX') # 港交所（港股）
+        }
+        # 向后兼容，保留 sse_calendar 属性
+        self.sse_calendar = self.calendars['SSE']
     
-    def _is_trading_day_and_not_closed(self) -> bool:
+    def _is_trading_day_and_not_closed(self, market: str = 'CN') -> bool:
         """
         判断今天是否是交易日且未收盘
+
+        Args:
+            market: 市场类型 ('CN' 或 'HK')
 
         Returns:
             bool: True表示今天是交易日且未收盘，False表示非交易日或已收盘
@@ -39,7 +47,7 @@ class StockDataFetcher:
             current_time = now.time()
 
             # 首先使用 pandas_market_calendars 判断是否为交易日
-            is_trading_day = self._is_trading_day(today)
+            is_trading_day = self._is_trading_day(today, market)
 
             if not is_trading_day:
                 self.logger.debug(f"今天 {today} 不是交易日")
@@ -73,7 +81,7 @@ class StockDataFetcher:
             # 如果无法判断，返回False（保守处理）
             return False
 
-    def _get_nearest_trading_date(self, input_date: date) -> Optional[date]:
+    def _get_nearest_trading_date(self, input_date: date, market: str = 'CN') -> Optional[date]:
         """
         获取指定日期最近的交易日（向前查找）
 
@@ -82,16 +90,24 @@ class StockDataFetcher:
 
         Args:
             input_date: 要检查的日期
+            market: 市场类型 ('CN' 或 'HK')
 
         Returns:
             datetime.date: 最近的交易日，失败返回None
         """
         try:
+            # 获取市场对应的日历
+            market_config = self.config.get_market_config(market)
+            calendar_name = market_config.get('calendar', 'SSE')
+
+            # 获取日历实例
+            calendar = self.calendars.get(calendar_name, self.sse_calendar)
+
             # 获取日期前后的交易日历（扩大范围以确保能获取到数据）
             start_date = input_date - timedelta(days=30)  # 往前30天
             end_date = input_date + timedelta(days=7)     # 往后7天
 
-            schedule = self.sse_calendar.schedule(start_date=start_date, end_date=end_date)
+            schedule = calendar.schedule(start_date=start_date, end_date=end_date)
 
             if schedule.empty:
                 self.logger.debug(f"无法获取 {start_date} 到 {end_date} 的交易日历")
@@ -148,7 +164,7 @@ class StockDataFetcher:
             self.logger.warning(f"备用方法获取最近交易日失败：{str(e)}")
             return None
 
-    def _is_trading_day(self, date_to_check) -> bool:
+    def _is_trading_day(self, date_to_check, market: str = 'CN') -> bool:
         """
         判断指定日期是否为交易日
 
@@ -156,13 +172,14 @@ class StockDataFetcher:
 
         Args:
             date_to_check: 要检查的日期
+            market: 市场类型 ('CN' 或 'HK')
 
         Returns:
             bool: True表示是交易日，False表示非交易日
         """
         try:
             # 获取最近的交易日
-            nearest_trading_date = self._get_nearest_trading_date(date_to_check)
+            nearest_trading_date = self._get_nearest_trading_date(date_to_check, market)
 
             if nearest_trading_date is None:
                 self.logger.debug(f"无法获取 {date_to_check} 的最近交易日")
@@ -182,7 +199,7 @@ class StockDataFetcher:
             self.logger.debug(f"使用备用方法检查 {date_to_check}: {'是交易日' if is_trading else '非交易日'}")
             return is_trading
 
-    def _remove_incomplete_trading_data(self, data: pd.DataFrame) -> pd.DataFrame:
+    def _remove_incomplete_trading_data(self, data: pd.DataFrame, market: str = 'CN') -> pd.DataFrame:
         """
         如果今天是交易日且未收盘，且最后一行数据是今天的，移除它
 
@@ -193,11 +210,12 @@ class StockDataFetcher:
 
         Args:
             data: 股票数据DataFrame
+            market: 市场类型 ('CN' 或 'HK')
 
         Returns:
             处理后的DataFrame
         """
-        if self._is_trading_day_and_not_closed():
+        if self._is_trading_day_and_not_closed(market):
             # 检查最后一行是否是今天的数据
             if len(data) > 0:
                 last_date = data['date'].iloc[-1]
@@ -234,7 +252,7 @@ class StockDataFetcher:
         else:
             return f'sz{stock_code}'
     
-    def _process_stock_data(self, data: pd.DataFrame, stock_code: str) -> Optional[pd.DataFrame]:
+    def _process_stock_data(self, data: pd.DataFrame, stock_code: str, market: str = 'CN') -> Optional[pd.DataFrame]:
         """
         处理和清洗股票数据
         
@@ -309,7 +327,7 @@ class StockDataFetcher:
 
             # 检查并处理未收盘的不完整数据
             original_length = len(data)
-            data = self._remove_incomplete_trading_data(data)
+            data = self._remove_incomplete_trading_data(data, market)
 
             if len(data) == 0:
                 self.logger.error("处理后数据为空")
@@ -433,32 +451,207 @@ class StockDataFetcher:
         except Exception as e:
             self.logger.warning(f"[方法3] 腾讯API获取失败：{str(e)}")
             return None
-    
-    def fetch_stock_data(self, stock_code: str, period: Optional[str] = None, adjust: Optional[str] = None, start_date: Optional[str] = None) -> Optional[pd.DataFrame]:
+
+    # ===== 港股数据抓取方法 =====
+
+    def _fetch_from_hk_hist_em(self, stock_code: str, start_date: str, adjust: str) -> Optional[pd.DataFrame]:
         """
-        获取股票历史价格数据（支持多数据源备用方案）
-        
+        从东方财富获取港股历史数据
+
+        先尝试 stock_hk_hist，失败后降级到 stock_hk_daily
+
         Args:
-            stock_code (str): 股票代码，如 '000001'
+            stock_code: 港股代码（5位，如 '00700'）
+            start_date: 开始日期
+            adjust: 复权类型
+
+        Returns:
+            原始数据或None
+        """
+        # 方法1: 尝试 stock_hk_hist (东方财富，带复权)
+        try:
+            self.logger.info(f"[港股] 从东方财富获取港股 {stock_code} 的数据（从 {start_date} 开始）...")
+            end_date = datetime.now().strftime('%Y%m%d')
+            raw_data = ak.stock_hk_hist(
+                symbol=stock_code,
+                period='daily',
+                start_date=start_date,
+                end_date=end_date,
+                adjust=adjust
+            )
+            return cast(pd.DataFrame, raw_data)
+        except Exception as e:
+            self.logger.warning(f"[港股] stock_hk_hist获取失败：{str(e)}，尝试备用API...")
+
+        # 方法2: 降级到 stock_hk_daily (不支持复权，但数据更稳定)
+        try:
+            self.logger.info(f"[港股] 尝试备用API stock_hk_daily 获取港股 {stock_code} 的数据...")
+            raw_data = ak.stock_hk_daily(symbol=stock_code)
+            return cast(pd.DataFrame, raw_data)
+        except Exception as e:
+            self.logger.warning(f"[港股] stock_hk_daily获取失败：{str(e)}")
+            return None
+
+    def get_hk_basic_info(self, stock_code: str) -> dict:
+        """
+        获取港股基本信息
+
+        Args:
+            stock_code: 港股代码（5位，如 '00700'）
+
+        Returns:
+            股票基本信息字典
+        """
+        info = {'股票代码': stock_code}
+
+        # 尝试东方财富港股公司信息
+        try:
+            df = ak.stock_hk_company_profile_em(symbol=stock_code)
+            if not df.empty:
+                info.update({
+                    '股票简称': df.iloc[0].get('公司名称', '未知'),
+                    '行业': df.iloc[0].get('所属行业', '未知'),
+                })
+                self.logger.info("✓ 港股公司信息获取成功（东方财富 API）")
+        except Exception as e:
+            self.logger.warning(f"[港股] 东方财富港股基本信息失败：{str(e)}")
+
+        # 尝试雪球API作为备用
+        if info.get('股票简称') == '未知':
+            try:
+                xq_info = self._get_hk_basic_info_from_xq(stock_code)
+                if xq_info.get('股票简称') != '未知':
+                    info.update(xq_info)
+                    self.logger.info("✓ 港股公司信息获取成功（雪球 API）")
+            except Exception as e:
+                self.logger.warning(f"[港股] 雪球港股基本信息失败：{str(e)}")
+
+        # 获取财务指标（市盈率、市净率、市值等）
+        try:
+            df = ak.stock_hk_financial_indicator_em(symbol=stock_code)
+            if not df.empty:
+                info.update({
+                    '总市值': df.iloc[0].get('总市值(港元)', 0),
+                    '市盈率': df.iloc[0].get('市盈率', '未知'),
+                    '市净率': df.iloc[0].get('市净率', '未知'),
+                    '股息率': df.iloc[0].get('股息率TTM(%)', 0),
+                    '每股净资产': df.iloc[0].get('每股净资产(元)', 0),
+                })
+        except Exception as e:
+            self.logger.warning(f"[港股] 财务指标获取失败：{str(e)}")
+
+        # 格式化市值数据
+        return self._format_market_values(info)
+
+    def _get_hk_basic_info_from_xq(self, stock_code: str) -> dict:
+        """
+        从雪球获取港股基本信息（备用方案）
+
+        Args:
+            stock_code: 港股代码（5位，如 '00700'）
+
+        Returns:
+            股票基本信息字典
+        """
+        # 港股在雪球的代码格式：HK + 代码
+        xq_code = f'HK{stock_code.zfill(5)}'
+
+        try:
+            # 获取基本信息
+            df = ak.stock_individual_basic_info_hk_xq(symbol=xq_code)
+
+            info = {}
+            name = '未知'
+            name_row = df[df['item'] == 'name']
+            if not name_row.empty:
+                val = name_row.iloc[0]['value']
+                if pd.notna(val) and val:
+                    name = val
+            info['股票简称'] = name
+
+            # 获取行业
+            industry = '未知'
+            industry_row = df[df['item'] == 'industry']
+            if not industry_row.empty:
+                val = industry_row.iloc[0]['value']
+                if isinstance(val, dict) and 'name' in val:
+                    industry = val['name']
+            info['行业'] = industry
+
+            return info
+        except Exception as e:
+            self.logger.warning(f"[港股] 雪球API获取失败：{str(e)}")
+            return {'股票简称': '未知', '行业': '未知'}
+
+    def get_hk_fund_flow_data(self, stock_code) -> dict:
+        """
+        获取港股资金流数据（占位方法）
+
+        Note:
+            港股无主力资金流数据，此方法返回空字典并记录警告
+
+        Args:
+            stock_code: 股票代码
+
+        Returns:
+            dict: 空字典
+        """
+        self.logger.info("港股不支持主力资金流数据")
+        return {}
+
+    def fetch_stock_data(self, stock_code: str, period: Optional[str] = None, adjust: Optional[str] = None, start_date: Optional[str] = None, market: Optional[str] = None) -> Optional[pd.DataFrame]:
+        """
+        获取股票历史价格数据（支持多市场、多数据源备用方案）
+
+        Args:
+            stock_code (str): 股票代码，如 '000001' (A股) 或 '00700' (港股)
             period (str): 周期，默认为 'daily'
             adjust (str): 复权类型，默认为 'qfq'
             start_date (str): 开始日期，如 '20230101',默认为当前时间往前推4个月
-        
+            market (str): 市场类型 ('CN' 或 'HK')，None表示自动识别
+
         Returns:
             pd.DataFrame or None: 股票数据DataFrame,失败返回None
         """
+        # 识别市场
+        if market is None:
+            market = self.config.identify_market(stock_code)
+
+        self.logger.info(f"识别到市场: {market}, 股票代码: {stock_code}")
+
         if period is None:
             period = self.config.DATA_CONFIG['default_period']
         if adjust is None:
             adjust = self.config.DATA_CONFIG['default_adjust']
-        
+
         # 如果没有指定开始日期，默认为当前时间往前推配置的月数
         if start_date is None:
             months_back = self.config.DATA_CONFIG.get('default_months_back', 4)
             default_start = datetime.now() - timedelta(days=months_back * 30)  # 每月按30天计算
             start_date = default_start.strftime('%Y%m%d')
-        
-        # 尝试多个数据源
+
+        # 根据市场调用不同的API
+        if market == 'HK':
+            return self._fetch_hk_data(stock_code, start_date, adjust)
+        elif market == 'CN':
+            return self._fetch_cn_data(stock_code, period, start_date, adjust)
+        else:
+            self.logger.error(f"不支持的市场类型: {market}")
+            return None
+
+    def _fetch_cn_data(self, stock_code: str, period: str, start_date: str, adjust: str) -> Optional[pd.DataFrame]:
+        """
+        获取A股数据
+
+        Args:
+            stock_code: 股票代码
+            period: 周期
+            start_date: 开始日期
+            adjust: 复权类型
+
+        Returns:
+            股票数据或None
+        """
         raw_data = None
         
         # 方法1：东方财富（默认）
@@ -487,9 +680,38 @@ class StockDataFetcher:
 
         
         # 处理数据
-        return self._process_stock_data(raw_data, stock_code)
-    
-    def get_fund_flow_data(self, stock_code, target_date=None):
+        return self._process_stock_data(raw_data, stock_code, market='CN')
+
+    def _fetch_hk_data(self, stock_code: str, start_date: str, adjust: str) -> Optional[pd.DataFrame]:
+        """
+        获取港股数据
+
+        Args:
+            stock_code: 股票代码（5位，如 '00700'）
+            start_date: 开始日期
+            adjust: 复权类型
+
+        Returns:
+            股票数据或None
+        """
+        raw_data = None
+
+        # 方法1：东方财富港股API
+        raw_data = self._fetch_from_hk_hist_em(stock_code, start_date, adjust)
+
+        # 如果所有方法都失败
+        if raw_data is None or len(raw_data) == 0:
+            self.logger.error(f"港股数据获取失败：{stock_code}")
+            self.logger.info("可能的原因：")
+            self.logger.info("1. 股票代码格式错误（请确保是5位数字，如 00700）")
+            self.logger.info("2. 网络连接问题")
+            self.logger.info("3. 股票代码不存在或已退市")
+            return None
+
+        # 处理数据
+        return self._process_stock_data(raw_data, stock_code, market='HK')
+
+    def get_fund_flow_data(self, stock_code, target_date=None, market: Optional[str] = None):
         """
         获取主力资金流数据
 
@@ -497,13 +719,23 @@ class StockDataFetcher:
             stock_code (str): 股票代码
             target_date (datetime.date, optional): 目标日期。如果指定，将获取该日期的资金流数据。
                                                   如果不指定，获取最新一天的数据。
+            market (str): 市场类型 ('CN' 或 'HK')，None表示自动识别
 
         Returns:
             dict: 资金流数据字典
 
         Note:
-            如果指定了 target_date，会优先获取该日期的数据，确保与股票数据日期一致。
+            - 港股不支持资金流数据
+            - 如果指定了 target_date，会优先获取该日期的数据，确保与股票数据日期一致。
         """
+        # 识别市场
+        if market is None:
+            market = self.config.identify_market(stock_code)
+
+        # 港股不支持资金流数据
+        if market == 'HK':
+            return self.get_hk_fund_flow_data(stock_code)
+
         try:
             self.logger.info("正在获取主力资金流数据...")
 
@@ -598,9 +830,35 @@ class StockDataFetcher:
             self.logger.error(f"获取主力资金流数据失败：{str(e)}")
             return {}
     
-    def get_stock_basic_info(self, stock_code):
+    def get_stock_basic_info(self, stock_code, market: Optional[str] = None):
         """
-        获取股票基本信息（支持降级机制）
+        获取股票基本信息（支持多市场）
+
+        Args:
+            stock_code (str): 股票代码
+            market (str): 市场类型 ('CN' 或 'HK')，None表示自动识别
+
+        Returns:
+            dict: 股票基本信息字典
+        """
+        # 识别市场
+        if market is None:
+            market = self.config.identify_market(stock_code)
+
+        self.logger.info(f"识别到市场: {market}, 正在获取股票基本信息...")
+
+        # 根据市场调用不同的API
+        if market == 'HK':
+            return self.get_hk_basic_info(stock_code)
+        elif market == 'CN':
+            return self._get_cn_basic_info(stock_code)
+        else:
+            self.logger.error(f"不支持的市场类型: {market}")
+            return self._get_default_basic_info(stock_code)
+
+    def _get_cn_basic_info(self, stock_code):
+        """
+        获取A股基本信息（支持降级机制）
 
         降级策略：
         1. 优先使用 akshare.stock_individual_info_em (东方财富 API)
@@ -614,7 +872,6 @@ class StockDataFetcher:
             dict: 股票基本信息字典
         """
         # 方案1: 尝试使用东方财富 API (原方案)
-        self.logger.info("正在获取股票基本信息...")
         try:
             df = ak.stock_individual_info_em(symbol=stock_code)
             info_dict = {}
@@ -624,7 +881,7 @@ class StockDataFetcher:
                 info_dict[key] = value
             stock_info = self._parse_basic_info(info_dict, stock_code)
             stock_info = self._format_market_values(stock_info)
-            self.logger.info("✓ 股票基本信息获取成功（东方财富 API）")
+            self.logger.info("✓ A股基本信息获取成功（东方财富 API）")
             return stock_info
         except Exception as e:
             self.logger.warning(f"东方财富 API 失败：{str(e)}")
@@ -634,7 +891,7 @@ class StockDataFetcher:
         try:
             stock_info = self._get_stock_basic_info_from_xq(stock_code)
             if stock_info and stock_info.get('股票简称') != '未知':
-                self.logger.info("✓ 股票基本信息获取成功（雪球 API 降级）")
+                self.logger.info("✓ A股基本信息获取成功（雪球 API 降级）")
                 return stock_info
         except Exception as e:
             self.logger.warning(f"雪球 API 降级失败：{str(e)}")

@@ -205,30 +205,31 @@ class Utils:
     @staticmethod
     def validate_stock_code(stock_code):
         """
-        验证股票代码格式
-        
+        验证股票代码格式（支持A股和港股）
+
         Args:
-            stock_code (str): 股票代码
-            
+            stock_code (str): 股票代码（6位A股或5位港股）
+
         Returns:
             bool: 是否有效
         """
         if not stock_code or not isinstance(stock_code, str):
             return False
-        
+
         # 去除空格
         stock_code = stock_code.strip()
-        
-        # 检查长度和数字格式
-        if len(stock_code) != 6 or not stock_code.isdigit():
-            return False
-        
-        # 检查首位数字是否合法（0、3、6开头）
-        first_digit = stock_code[0]
-        if first_digit not in ['0', '3', '6']:
-            return False
-        
-        return True
+
+        # A股：6位数字，0/1/2/3/6开头
+        if len(stock_code) == 6 and stock_code.isdigit():
+            first_digit = stock_code[0]
+            if first_digit in ['0', '1', '2', '3', '6']:
+                return True
+
+        # 港股：5位数字
+        if len(stock_code) == 5 and stock_code.isdigit():
+            return True
+
+        return False
     
     @staticmethod
     def get_current_time():
@@ -280,20 +281,26 @@ class Utils:
                 print("\n使用方法:")
                 print("  aishare [股票代码]     - 分析指定股票")
                 print("  aishare -h/--help     - 显示帮助信息")
+                print("\n支持的市场:")
+                print("  A股: 6位数字代码，如 000001 (深市)、600036 (沪市)")
+                print("  港股: 5位数字代码，如 00700 (腾讯)、09988 (阿里巴巴)")
                 print("\n示例:")
-                print("  aishare 000001        - 分析平安银行")
-                print("  aishare 600036        - 分析招商银行")
+                print("  aishare 000001        - 分析平安银行（A股）")
+                print("  aishare 600036        - 分析招商银行（A股）")
+                print("  aishare 00700         - 分析腾讯控股（港股）")
+                print("  aishare 09988         - 分析阿里巴巴（港股）")
                 print("\n交互模式:")
                 print("  不带参数运行将进入交互模式，可以输入股票代码进行分析")
                 print("  输入 'quit' 或 'exit' 退出程序")
                 sys.exit(0)
-            
+
             # 处理股票代码
             if Utils.validate_stock_code(arg):
                 return arg
             else:
                 print(f"错误：股票代码 '{arg}' 格式不正确")
-                print("正确格式：6位数字，如 000001")
+                print("正确格式：6位数字（A股）或5位数字（港股）")
+                print("示例：000001 (A股) 或 00700 (港股)")
                 print("使用 'aishare --help' 查看更多帮助信息")
                 return None
         return None

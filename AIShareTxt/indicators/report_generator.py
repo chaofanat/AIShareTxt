@@ -14,7 +14,7 @@ class ReportGenerator:
     def __init__(self):
         self.config = Config()
     
-    def generate_report(self, stock_code, indicators, stock_info=None, stock_data=None):
+    def generate_report(self, stock_code, indicators, stock_info=None, stock_data=None, market=None):
         """
         生成完整的股票数据报告
 
@@ -23,29 +23,34 @@ class ReportGenerator:
             indicators (dict): 指标数据字典
             stock_info (dict): 股票基本信息
             stock_data (pd.DataFrame): 股票历史数据
+            market (str): 市场类型 ('CN' 或 'HK')，None表示自动识别
 
         Returns:
             str: 格式化的报告文本
         """
         if indicators is None:
             return "无法生成数据报告：数据不足"
-        
+
+        # 识别市场
+        if market is None:
+            market = self.config.identify_market(stock_code)
+
         report = []
-        
+
         # 报告头部
-        report.extend(self._generate_header(stock_code, indicators))
-        
+        report.extend(self._generate_header(stock_code, indicators, market))
+
         # 股票基本信息
         if stock_info:
-            report.extend(self._generate_basic_info_section(stock_info))
-        
+            report.extend(self._generate_basic_info_section(stock_info, market))
+
         # 技术指标各个部分
         report.extend(self._generate_ma_section(indicators))
         report.extend(self._generate_ma_derived_section(indicators))
         report.extend(self._generate_volume_price_section(indicators))
         report.extend(self._generate_momentum_section(indicators))
         report.extend(self._generate_volatility_section(indicators))
-        report.extend(self._generate_fund_flow_section(indicators))
+        report.extend(self._generate_fund_flow_section(indicators, market))
         report.extend(self._generate_trend_strength_section(indicators))
         report.extend(self._generate_spatial_temporal_section(indicators))
         report.extend(self._generate_volume_comparison_section(indicators))
@@ -64,23 +69,33 @@ class ReportGenerator:
         
         return "\n".join(report)
     
-    def _generate_header(self, stock_code, indicators):
+    def _generate_header(self, stock_code, indicators, market='CN'):
         """生成报告头部"""
         header = []
         header.append(self.config.REPORT_CONFIG['title_separator'])
-        header.append(f"股票代码：{stock_code}")
+
+        # 获取市场配置
+        market_config = self.config.get_market_config(market)
+        market_name = market_config.get('name', '未知')
+        currency_symbol = market_config.get('currency_symbol', '元')
+
+        header.append(f"股票代码：{stock_code} ({market_name})")
         header.append(f"数据日期：{indicators.get('date', 'N/A')}")
-        header.append(f"当前价格：{indicators.get('current_price', 0):.{self.config.DISPLAY_PRECISION['price']}f} 元")
+        header.append(f"当前价格：{indicators.get('current_price', 0):.{self.config.DISPLAY_PRECISION['price']}f} {currency_symbol}")
         header.append(self.config.REPORT_CONFIG['title_separator'])
         return header
     
-    def _generate_basic_info_section(self, stock_info):
+    def _generate_basic_info_section(self, stock_info, market='CN'):
         """生成基本信息部分"""
         section = []
         section.append("\n【一、股票基本信息】")
         section.append(self.config.REPORT_CONFIG['section_separator'])
         section.append(f"股票简称：{stock_info.get('股票简称', '未知')}")
         section.append(f"所属行业：{stock_info.get('行业', '未知')}")
+
+        # 获取市场配置
+        market_config = self.config.get_market_config(market)
+        currency_symbol = market_config.get('currency_symbol', '元')
         
         # 股本信息
         if stock_info.get('总股本_亿股', 0) > 0:
@@ -233,31 +248,36 @@ class ReportGenerator:
         
         return section
     
-    def _generate_fund_flow_section(self, indicators):
+    def _generate_fund_flow_section(self, indicators, market='CN'):
         """生成主力资金流部分"""
         section = []
         section.append("\n【七、主力资金流指标】")
         section.append(self.config.REPORT_CONFIG['section_separator'])
-        
+
+        # 港股不支持主力资金流数据
+        if market == 'HK' or not self.config.has_fund_flow(market):
+            section.append("港股不支持主力资金流数据")
+            return section
+
         has_fund_data = '主力净流入额' in indicators
         has_5day_data = '5日主力净流入额' in indicators
-        
+
         if has_fund_data or has_5day_data:
             section.append("主力资金流向:")
-            
+
             # 最新日期的资金流数据
             if has_fund_data:
                 section.extend(self._generate_daily_fund_flow(indicators))
-            
+
             # 5日累计数据
             if has_5day_data:
                 section.extend(self._generate_5day_fund_flow(indicators))
-            
+
             # 资金流向分析
             section.extend(self._generate_fund_flow_analysis(indicators, has_fund_data, has_5day_data))
         else:
             section.append("暂无主力资金流数据")
-        
+
         return section
     
     def _generate_trend_strength_section(self, indicators):
