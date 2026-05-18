@@ -498,3 +498,102 @@ class AkshareDataSource(BaseDataSource):
             '市盈率': "未知",
             '市净率': "未知"
         }
+
+    # ==================== 港股数据 ====================
+
+    def fetch_hk_stock_data(self, stock_code: str, start_date: str, adjust: str) -> Optional[pd.DataFrame]:
+        """获取港股历史数据（东方财富 → stock_hk_daily fallback）"""
+        raw_data = self._fetch_from_hk_hist_em(stock_code, start_date, adjust)
+        if raw_data is None or len(raw_data) == 0:
+            self.logger.error(f"港股数据获取失败：{stock_code}")
+            return None
+        return raw_data
+
+    def _fetch_from_hk_hist_em(self, stock_code: str, start_date: str, adjust: str) -> Optional[pd.DataFrame]:
+        """从东方财富获取港股历史数据"""
+        try:
+            self.logger.info(f"[港股] 从东方财富获取港股 {stock_code} 的数据（从 {start_date} 开始）...")
+            end_date = datetime.now().strftime('%Y%m%d')
+            raw_data = ak.stock_hk_hist(
+                symbol=stock_code,
+                period='daily',
+                start_date=start_date,
+                end_date=end_date,
+                adjust=adjust
+            )
+            return cast(pd.DataFrame, raw_data)
+        except Exception as e:
+            self.logger.warning(f"[港股] stock_hk_hist获取失败：{str(e)}，尝试备用API...")
+
+        try:
+            self.logger.info(f"[港股] 尝试备用API stock_hk_daily 获取港股 {stock_code} 的数据...")
+            raw_data = ak.stock_hk_daily(symbol=stock_code)
+            return cast(pd.DataFrame, raw_data)
+        except Exception as e:
+            self.logger.warning(f"[港股] stock_hk_daily获取失败：{str(e)}")
+            return None
+
+    def get_hk_stock_basic_info(self, stock_code: str) -> dict:
+        """获取港股基本信息"""
+        info = {'股票代码': stock_code}
+
+        try:
+            df = ak.stock_hk_company_profile_em(symbol=stock_code)
+            if not df.empty:
+                info.update({
+                    '股票简称': df.iloc[0].get('公司名称', '未知'),
+                    '行业': df.iloc[0].get('所属行业', '未知'),
+                })
+                self.logger.info("✓ 港股公司信息获取成功（东方财富 API）")
+        except Exception as e:
+            self.logger.warning(f"[港股] 东方财富港股基本信息失败：{str(e)}")
+
+        if info.get('股票简称') == '未知':
+            try:
+                xq_info = self._get_hk_basic_info_from_xq(stock_code)
+                if xq_info.get('股票简称') != '未知':
+                    info.update(xq_info)
+                    self.logger.info("✓ 港股公司信息获取成功（雪球 API）")
+            except Exception as e:
+                self.logger.warning(f"[港股] 雪球港股基本信息失败：{str(e)}")
+
+        try:
+            df = ak.stock_hk_financial_indicator_em(symbol=stock_code)
+            if not df.empty:
+                info.update({
+                    '总市值': df.iloc[0].get('总市值(港元)', 0),
+                    '市盈率': df.iloc[0].get('市盈率', '未知'),
+                    '市净率': df.iloc[0].get('市净率', '未知'),
+                    '股息率': df.iloc[0].get('股息率TTM(%)', 0),
+                    '每股净资产': df.iloc[0].get('每股净资产(元)', 0),
+                })
+        except Exception as e:
+            self.logger.warning(f"[港股] 财务指标获取失败：{str(e)}")
+
+        return self._format_market_values(info)
+
+    def _get_hk_basic_info_from_xq(self, stock_code: str) -> dict:
+        """从雪球获取港股基本信息"""
+        xq_code = f'HK{stock_code.zfill(5)}'
+        try:
+            df = ak.stock_individual_basic_info_hk_xq(symbol=xq_code)
+            info = {}
+            name = '未知'
+            name_row = df[df['item'] == 'name']
+            if not name_row.empty:
+                val = name_row.iloc[0]['value']
+                if pd.notna(val) and val:
+                    name = val
+            info['股票简称'] = name
+
+            industry = '未知'
+            industry_row = df[df['item'] == 'industry']
+            if not industry_row.empty:
+                val = industry_row.iloc[0]['value']
+                if isinstance(val, dict) and 'name' in val:
+                    industry = val['name']
+            info['行业'] = industry
+            return info
+        except Exception as e:
+            self.logger.warning(f"[港股] 雪球API获取失败：{str(e)}")
+            return {'股票简称': '未知', '行业': '未知'}

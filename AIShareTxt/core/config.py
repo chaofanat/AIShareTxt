@@ -216,6 +216,28 @@ class IndicatorConfig:
         '0': 'sz',  # 深圳市场
         '3': 'sz'   # 深圳市场（创业板）
     }
+
+    # 市场配置
+    MARKET_CONFIGS = {
+        'CN': {
+            'name': 'A股',
+            'description': '中国大陆证券市场'
+        },
+        'HK': {
+            'name': '港股',
+            'description': '香港联合交易所',
+            'market_map': {},
+            'calendar': 'HKEX',
+            'currency': 'HKD',
+            'currency_symbol': 'HK$',
+        }
+    }
+
+    # 股票代码模式（正则）
+    STOCK_CODE_PATTERNS = {
+        'CN': r'^[036]\d{5}$',     # 6位数字，0/3/6开头
+        'HK': r'^0\d{4}$'           # 5位数字，0开头
+    }
     
     # 数据源配置
     DATA_SOURCE_CONFIG = {
@@ -359,6 +381,26 @@ class IndicatorConfig:
     LOG_FILE_PATH = 'logs/'
     LOG_MAX_SIZE = 10 * 1024 * 1024  # 10MB
     LOG_BACKUP_COUNT = 5
+
+    @staticmethod
+    def identify_market(stock_code: str) -> str:
+        """根据股票代码识别市场 ('CN', 'HK', 或 'UNKNOWN')"""
+        import re
+        if not stock_code or not isinstance(stock_code, str):
+            return 'UNKNOWN'
+        stock_code = stock_code.strip()
+        # 港股：5位数字，0开头（先匹配，避免与A股冲突）
+        if re.match(IndicatorConfig.STOCK_CODE_PATTERNS['HK'], stock_code):
+            return 'HK'
+        # A股：6位数字，0/3/6开头
+        if re.match(IndicatorConfig.STOCK_CODE_PATTERNS['CN'], stock_code):
+            return 'CN'
+        return 'UNKNOWN'
+
+    @staticmethod
+    def get_market_config(market: str) -> dict:
+        """获取指定市场的配置"""
+        return IndicatorConfig.MARKET_CONFIGS.get(market, IndicatorConfig.MARKET_CONFIGS['CN'])
 
 
 # 向后兼容的别名

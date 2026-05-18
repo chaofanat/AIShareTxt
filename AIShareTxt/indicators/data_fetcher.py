@@ -22,7 +22,13 @@ class StockDataFetcher:
     def __init__(self):
         self.config = Config()
         self.logger = LoggerManager.get_logger('data_fetcher')
-        self.sse_calendar = mcal.get_calendar('SSE')
+
+        # 初始化多市场日历
+        self.calendars = {
+            'SSE': mcal.get_calendar('SSE'),
+            'HKEX': mcal.get_calendar('HKEX'),
+        }
+        self.sse_calendar = self.calendars['SSE']
 
         # 初始化数据源
         self._akshare = AkshareDataSource()
@@ -45,12 +51,16 @@ class StockDataFetcher:
     # ==================== 公开接口 ====================
 
     def fetch_stock_data(self, stock_code: str, period: Optional[str] = None,
-                         adjust: Optional[str] = None, start_date: Optional[str] = None) -> Optional[pd.DataFrame]:
+                         adjust: Optional[str] = None, start_date: Optional[str] = None,
+                         market: Optional[str] = None) -> Optional[pd.DataFrame]:
         """
-        获取股票历史价格数据
+        获取股票历史价格数据（支持多市场）
 
         根据配置选择主数据源，失败后 fallback 到 akshare
         """
+        if market is None:
+            market = self.config.identify_market(stock_code)
+
         if period is None:
             period = self.config.DATA_CONFIG['default_period']
         if adjust is None:
@@ -60,16 +70,19 @@ class StockDataFetcher:
             default_start = datetime.now() - timedelta(days=months_back * 30)
             start_date = default_start.strftime('%Y%m%d')
 
-        # 主数据源
-        raw_data = self._primary.fetch_stock_data(stock_code, period, start_date, adjust)
-        self._used_source = self._primary.name
-
-        # fallback 到 akshare
-        if (raw_data is None or (isinstance(raw_data, pd.DataFrame) and len(raw_data) == 0)):
-            if self._primary is not self._akshare:
-                self.logger.info("主数据源失败，fallback 到 akshare")
-                raw_data = self._akshare.fetch_stock_data(stock_code, period, start_date, adjust)
-                self._used_source = 'akshare'
+        if market == 'HK':
+            raw_data = self._akshare.fetch_hk_stock_data(stock_code, start_date, cast(str, adjust))
+        elif market == 'CN':
+            raw_data = self._primary.fetch_stock_data(stock_code, period, start_date, adjust)
+            self._used_source = self._primary.name
+            if (raw_data is None or (isinstance(raw_data, pd.DataFrame) and len(raw_data) == 0)):
+                if self._primary is not self._akshare:
+                    self.logger.info("主数据源失败，fallback 到 akshare")
+                    raw_data = self._akshare.fetch_stock_data(stock_code, period, start_date, adjust)
+                    self._used_source = 'akshare'
+        else:
+            self.logger.error(f"不支持的市场类型: {market}")
+            return None
 
         if raw_data is None or (isinstance(raw_data, pd.DataFrame) and len(raw_data) == 0):
             self.logger.error(f"所有数据源均获取失败：{stock_code}")
@@ -77,8 +90,14 @@ class StockDataFetcher:
 
         return self._process_stock_data(raw_data, stock_code)
 
-    def get_fund_flow_data(self, stock_code, target_date=None):
+    def get_fund_flow_data(self, stock_code, target_date=None, market: Optional[str] = None):
         """获取主力资金流数据，含日期一致性校验"""
+        if market is None:
+            market = self.config.identify_market(stock_code)
+        if market == 'HK':
+            self.logger.info("港股不支持主力资金流数据")
+            return {}
+
         data = self._primary.get_fund_flow_data(stock_code, target_date)
 
         # 校验返回数据的日期是否与请求日期一致
@@ -97,8 +116,13 @@ class StockDataFetcher:
 
         return data
 
-    def get_stock_basic_info(self, stock_code):
+    def get_stock_basic_info(self, stock_code, market: Optional[str] = None):
         """获取股票基本信息"""
+        if market is None:
+            market = self.config.identify_market(stock_code)
+        if market == 'HK':
+            return self._akshare.get_hk_stock_basic_info(stock_code)
+
         info = self._primary.get_stock_basic_info(stock_code)
 
         if (not info or info.get('股票简称') == '未知') and self._primary is not self._akshare:
