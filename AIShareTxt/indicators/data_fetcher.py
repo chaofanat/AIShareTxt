@@ -6,11 +6,11 @@
 """
 
 import pandas as pd
-import pandas_market_calendars as mcal
 from typing import Optional, cast
-from datetime import datetime, timedelta, time, date
+from datetime import datetime, timedelta
 from ..core.config import IndicatorConfig as Config
 from ..utils.utils import LoggerManager
+from ..utils.trading_calendar import is_trading_day_and_not_closed
 from .data_sources import AkshareDataSource, create_gm_source
 import warnings
 warnings.filterwarnings('ignore')
@@ -22,7 +22,6 @@ class StockDataFetcher:
     def __init__(self):
         self.config = Config()
         self.logger = LoggerManager.get_logger('data_fetcher')
-        self.sse_calendar = mcal.get_calendar('SSE')
 
         # 初始化数据源
         self._akshare = AkshareDataSource()
@@ -193,7 +192,7 @@ class StockDataFetcher:
 
     def _remove_incomplete_trading_data(self, data: pd.DataFrame) -> pd.DataFrame:
         """如果今天是交易日且未收盘，移除最后一行当天数据"""
-        if self._is_trading_day_and_not_closed():
+        if is_trading_day_and_not_closed():
             if len(data) > 0:
                 last_date = data['date'].iloc[-1]
                 if hasattr(last_date, 'date'):
@@ -213,100 +212,3 @@ class StockDataFetcher:
             self.logger.debug("当前为非交易日或已收盘，保留所有数据")
 
         return data
-
-    # ==================== 交易日判断 ====================
-
-    def _is_trading_day_and_not_closed(self) -> bool:
-        """判断今天是否是交易日且未收盘"""
-        try:
-            now = datetime.now()
-            today = now.date()
-            current_time = now.time()
-
-            is_trading_day = self._is_trading_day(today)
-            if not is_trading_day:
-                self.logger.debug(f"今天 {today} 不是交易日")
-                return False
-
-            market_open = time(9, 25)
-            is_market_opened = current_time >= market_open
-            if not is_market_opened:
-                self.logger.debug(f"今天 {today} 还未开盘")
-                return False
-
-            market_close = time(15, 0)
-            is_market_closed = current_time >= market_close
-
-            self.logger.debug(f"当前时间: {now}, 交易日: {is_trading_day}, 已开盘: {is_market_opened}, 已收盘: {is_market_closed}")
-            return not is_market_closed
-
-        except Exception as e:
-            self.logger.warning(f"判断交易时间时出错：{str(e)}")
-            return False
-
-    def _get_nearest_trading_date(self, input_date: date) -> Optional[date]:
-        """获取指定日期最近的交易日（向前查找）"""
-        try:
-            start_date = input_date - timedelta(days=30)
-            end_date = input_date + timedelta(days=7)
-
-            schedule = self.sse_calendar.schedule(start_date=start_date, end_date=end_date)
-
-            if schedule.empty:
-                self.logger.debug(f"无法获取 {start_date} 到 {end_date} 的交易日历")
-                return self._fallback_nearest_trading_date(input_date)
-
-            trading_days = sorted(schedule.index.date)
-
-            for trading_day in reversed(trading_days):
-                if trading_day <= input_date:
-                    self.logger.debug(f"日期 {input_date} 的最近交易日是 {trading_day}")
-                    return trading_day
-
-            if trading_days:
-                last_trading_day = trading_days[-1]
-                self.logger.debug(f"日期 {input_date} 超出范围，返回最后一个交易日 {last_trading_day}")
-                return last_trading_day
-
-            return None
-
-        except Exception as e:
-            self.logger.warning(f"使用pandas_market_calendars获取最近交易日失败：{str(e)}")
-            return self._fallback_nearest_trading_date(input_date)
-
-    def _fallback_nearest_trading_date(self, input_date: date) -> Optional[date]:
-        """备用的最近交易日获取方法"""
-        try:
-            current_date = input_date
-            max_lookback = 7
-
-            for _ in range(max_lookback):
-                weekday = current_date.weekday()
-                if weekday < 5:
-                    self.logger.debug(f"使用备用方法：日期 {input_date} 的最近交易日是 {current_date}")
-                    return current_date
-                current_date = current_date - timedelta(days=1)
-
-            self.logger.debug(f"备用方法未找到交易日，返回输入日期 {input_date}")
-            return input_date
-
-        except Exception as e:
-            self.logger.warning(f"备用方法获取最近交易日失败：{str(e)}")
-            return None
-
-    def _is_trading_day(self, date_to_check) -> bool:
-        """判断指定日期是否为交易日"""
-        try:
-            nearest_trading_date = self._get_nearest_trading_date(date_to_check)
-            if nearest_trading_date is None:
-                self.logger.debug(f"无法获取 {date_to_check} 的最近交易日")
-                return False
-            is_trading = nearest_trading_date == date_to_check
-            self.logger.debug(f"使用日历检查 {date_to_check}: {'是交易日' if is_trading else '非交易日'}")
-            return is_trading
-        except Exception as e:
-            self.logger.warning(f"判断交易日失败：{str(e)}")
-            weekday = date_to_check.weekday()
-            is_trading = weekday < 5
-            self.logger.debug(f"使用备用方法检查 {date_to_check}: {'是交易日' if is_trading else '非交易日'}")
-            return is_trading
