@@ -225,6 +225,61 @@ class IndicatorConfig:
         }
     }
 
+    # 市场环境维度配置（独立于个股指标，用于 analyze_market / aishare-market）
+    MARKET_ENVIRONMENT_CONFIG = {
+        # 支持的指数代码（akshare stock_zh_index_daily_em 的 symbol 格式）
+        'index_codes': {
+            'sh000001': '上证指数',
+            'sz399001': '深证成指',
+            'sz399006': '创业板指',
+            'sh000300': '沪深300',
+            'sh000905': '中证500',
+            'sh000688': '科创50',
+        },
+        # 默认展示的主指数（P0 三大指数）
+        'primary_indexes': ['sh000001', 'sz399001', 'sz399006'],
+
+        # 指数历史数据回溯天数（够算 MA60、ADX 等）
+        'index_history_days': 120,
+
+        # 缓存 TTL（秒），按数据更新频率定
+        'cache_ttl': {
+            'market_snapshot_intraday': 30,       # 盘中全市场快照
+            'market_snapshot_post_close': 300,    # 盘后全市场快照
+            'index_daily_intraday': 60,           # 盘中指数日线
+            'index_daily_post_close': 3600,       # 盘后指数日线 1 小时
+            'industry_boards_intraday': 30,       # 行业板块（与快照同步）
+            'industry_boards_post_close': 300,
+            'concept_boards_intraday': 30,
+            'concept_boards_post_close': 300,
+            'stock_industry_mapping': 86400,      # 个股→行业映射（一日）
+        },
+
+        # 涨跌停判定阈值（%）
+        'limit_thresholds': {
+            'main_board_up': 9.9,
+            'main_board_down': -9.9,
+            'st_up': 4.9,
+            'st_down': -4.9,
+            'star_gem_up': 19.9,          # 创业板（300xxx）/科创板（688xxx）
+            'star_gem_down': -19.9,
+        },
+
+        # 市场情绪阈值
+        'breadth_thresholds': {
+            'panic_limit_down_count': 30,    # 跌停家数 ≥ 此值 + 中位数 ≤ -2% => 恐慌
+            'panic_median_pct': -2.0,
+            'hot_limit_up_count': 80,        # 涨停家数 ≥ 此值 + 封板率 ≥ 60% => 过热
+            'hot_seal_ratio': 0.6,
+        },
+
+        # 阶段判定 ADX 阈值（参考 Wilder 原始论文，25/20）
+        'phase_adx_thresholds': {
+            'trending': 25,
+            'ranging': 20,
+        },
+    }
+
     # AI配置
     AI_CONFIG = {
         # 默认使用的AI提供商
@@ -332,6 +387,16 @@ class IndicatorConfig:
                 'propagate': False
             },
             'aishare_txt.utils': {
+                'level': 'DEBUG',
+                'handlers': ['file'],
+                'propagate': False
+            },
+            'aishare_txt.market': {
+                'level': 'DEBUG',
+                'handlers': ['file'],
+                'propagate': False
+            },
+            'aishare_txt.trading_calendar': {
                 'level': 'DEBUG',
                 'handlers': ['file'],
                 'propagate': False

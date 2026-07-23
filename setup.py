@@ -71,6 +71,7 @@ setup(
     entry_points={
         "console_scripts": [
             "aishare=AIShareTxt.core.data_processor:main",
+            "aishare-market=AIShareTxt.market.cli:main",
         ],
     },
     include_package_data=True,

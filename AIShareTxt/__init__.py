@@ -24,6 +24,16 @@ from .indicators.technical_indicators import TechnicalIndicators
 # 导入AI客户端
 from .ai.client import AIClient
 
+# 导入市场环境模块
+from .market import (
+    MarketEnvironmentProcessor,
+    MarketDataFetcher,
+    MarketEnvironmentAnalyzer,
+    MarketReportGenerator,
+    SectorResolver,
+    analyze_market,
+)
+
 # 导入工具
 from .utils.utils import Logger
 from .utils.stock_list import get_stock_list
@@ -43,6 +53,14 @@ __all__ = [
     # AI客户端
     "AIClient",
 
+    # 市场环境
+    "MarketEnvironmentProcessor",
+    "MarketDataFetcher",
+    "MarketEnvironmentAnalyzer",
+    "MarketReportGenerator",
+    "SectorResolver",
+    "analyze_market",
+
     # 工具
     "Logger",
     "get_stock_list",
@@ -55,9 +73,6 @@ def analyze_stock(symbol):
 
     参数:
         symbol: 股票代码
-        period: 数据周期，默认1年
-        use_ai: 是否使用AI分析
-        ai_provider: AI提供商，支持"deepseek"或"zhipu"
 
     返回:
         分析结果字典
