@@ -1,6 +1,8 @@
 # AIShareTxt
 
-[![Python Version](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://python.org)
+[English](README.en.md) | **中文**
+
+[![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://python.org)
 [![License](https://img.shields.io/badge/license-MulanPSL2-blue.svg)](LICENSE)
 
 **中国股票技术指标文本生成工具包**
@@ -20,6 +22,7 @@
 
 - 📊 **股票数据获取** - 支持akshare（默认）和掘金量化(gm)双数据源，自动降级
 - 📈 **技术指标计算** - 基于TA-Lib，支持50+种技术指标计算
+- 🌐 **市场环境分析** - 独立的大盘/市场宽度/板块报告（`aishare-market`），与个股分析解耦
 - 🤖 **AI数据处理建议** - 集成DeepSeek和智谱AI，提供数据质量处理建议
 - 📋 **详细报告生成** - 自动生成专业的股票数据报告
 - 🔧 **模块化设计** - 清晰的模块结构，易于扩展和定制
@@ -134,6 +137,32 @@ $ aishare
 # [显示完整的股票数据报告]
 ```
 
+### 市场环境分析
+
+`aishare-market` 提供独立于个股的大盘环境报告（指数行情 + 市场宽度 + 阶段判定），传入股票代码时附加该股的板块涨跌：
+
+```bash
+# 仅市场环境
+aishare-market
+
+# 市场环境 + 指定股票的板块信息
+aishare-market 000001
+```
+
+也可通过 API 调用：
+
+```python
+from AIShareTxt import analyze_market
+
+# 仅市场环境
+print(analyze_market())
+
+# 含个股板块
+print(analyze_market('000001'))
+```
+
+> 配置 `GM_TOKEN` 后，市场数据（指数/快照/成交额中枢）优先走掘金 SDK，未配置或失败时自动回退 akshare。
+
 ### AI智能分析
 
 ```python
@@ -198,19 +227,28 @@ AIShareTxt/
 ├── core/                      # 核心协调层
 │   ├── data_processor.py     # 股票数据处理器（主要入口协调器）
 │   └── config.py             # 配置管理
-├── indicators/                # 技术指标处理层
-│   ├── data_fetcher.py       # 数据获取调度器（根据配置选择数据源）
+├── indicators/                # 个股技术指标层
+│   ├── data_fetcher.py       # 个股数据获取调度器（akshare/gm）
 │   ├── data_sources/         # 数据源模块
 │   │   ├── base.py           # 数据源抽象基类
 │   │   ├── akshare_source.py # akshare数据源（东方财富/新浪/腾讯）
 │   │   └── gm_source.py      # 掘金量化(gm)数据源
 │   ├── technical_indicators.py # 技术指标计算
 │   └── report_generator.py   # 技术指标报告生成
+├── market/                    # 市场环境分析层（独立于个股）
+│   ├── market_fetcher.py     # 市场级数据获取（指数/快照/板块）+ TTL 缓存
+│   ├── market_analyzer.py    # 三层阶段判定（趋势 × 情绪 → 合成）
+│   ├── market_report_generator.py # 市场环境报告生成
+│   ├── sector_resolver.py    # 个股 → 行业/概念板块映射
+│   ├── processor.py          # MarketEnvironmentProcessor 编排类
+│   └── cli.py                # aishare-market 命令入口
 ├── ai/                        # AI数据处理建议模块
 │   └── client.py             # AI客户端
 ├── utils/                     # 工具模块
 │   ├── utils.py              # 通用工具类
-│   └── stock_list.py         # 股票列表工具
+│   ├── stock_list.py         # 股票列表工具
+│   ├── cache.py              # TTLCache（市场数据按更新频率分级缓存）
+│   └── trading_calendar.py   # 交易日历（SSE）+ 盘中/盘后判定
 └── examples/                  # 示例代码
     └── legacy_api.py         # 传统API示例
 ```
@@ -347,7 +385,8 @@ export GM_TOKEN="your_gm_token"
 ```
 
 > 掘金密钥获取方式：掘金终端 → 系统设置 → 密钥管理  
-> gm 数据源需要掘金量化终端在线，连接失败时自动降级到 akshare
+> gm 数据源需要掘金量化终端在线，连接失败时自动降级到 akshare  
+> `DATA_SOURCE=gm` 控制个股数据源切换；市场环境模块（`aishare-market`）只要检测到 `GM_TOKEN` 就优先走 gm，无需设置 `DATA_SOURCE`
 
 ### 分析配置
 
